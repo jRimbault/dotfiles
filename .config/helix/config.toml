@@ -1,0 +1,34 @@
+theme = "onedark"
+
+[editor]
+line-number = "relative"
+mouse = false
+cursorline = true
+scrolloff = 10
+
+
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
+[editor.file-picker]
+hidden = false
+
+[editor.whitespace.render]
+space = "none"
+tab = "none"
+nbsp = "none"
+nnbsp = "none"
+newline = "none"
+
+[editor.smart-tab]
+enable = true
+[keys.normal]
+tab = "move_parent_node_end"
+S-tab = "move_parent_node_start"
+[keys.insert]
+S-tab = "move_parent_node_start"
+[keys.select]
+tab = "extend_parent_node_end"
+S-tab = "extend_parent_node_start"
