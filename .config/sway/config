@@ -49,6 +49,7 @@ output '$laptop_display' resolution 1920x1080 position 320,1440
 ### Idle configuration
 set $lock 'xkcd_lock'
 exec swayidle -w timeout 600 '$lock' before-sleep '$lock'
+exec swayidle -w timeout 3600 'systemctl suspend'
 bindsym $mod+l exec '$lock'
 
 ### Input configuration
