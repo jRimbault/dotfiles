@@ -1,0 +1,1 @@
+/home/jrimbault/Documents/github.com/jRimbault/rc/config/vim/onedark.vim/colors/onedark.vim
