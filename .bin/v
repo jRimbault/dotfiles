@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# quickly open files
+fzfvim()
+{
+  local file
+  file=$(fzf)
+  if [[ -n "$file" ]]; then
+    $EDITOR "$file"
+  fi
+}
+
+if [[ -n "$*" ]]; then
+  if [[ -d "$1" ]]; then
+    cd "$1" &&
+    shift &&
+    v "$@"
+  else
+    $EDITOR $*
+  fi
+else
+  fzfvim "$@"
+fi

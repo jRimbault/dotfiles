@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+
+git:log()
+{
+  git -c color.ui=always log \
+    --date=short \
+    --format="%C(red)%h%Creset %C(green)%ad%Creset %s" \
+    "$@"
+}
+
+fzf:preview()
+{
+  local git_cmd
+  git_cmd="git -c color.ui=always show --shortstat"
+  fzf --ansi --no-mouse --preview="$git_cmd {+1}"
+}
+
+fzf:commit()
+{
+  git:log "$@" | fzf:preview | cut -d ' ' -f 1
+}
+
+main()
+{
+  local commit
+  # shellcheck disable=2034
+  LESS="-R -X -C"  # each diff should clear the pager before displaying
+  while true; do
+    commit=$(fzf:commit "$@")
+    if [ "$commit" == "" ]; then
+      exit 0
+    fi
+    git show "$commit" --stat
+  done
+}
+
+main "$@"

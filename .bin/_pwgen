@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+
+IFS=$'\n\t'
+
+# placeholder for a real pwgen
+# if you're not sure about how bash arrays work,
+# just make one password at a time
+#
+#  param number of characters in a password (default 32)
+#  param number of passwords (default 1)
+#
+#  return string|string[]
+pwgen()
+{
+  local char iter
+  char=${1:-32}
+  iter=${2:-1}
+  for ((i = 0; i < iter; i++)); do
+    _pwgen "$char"
+  done
+}
+# private function for pwgen
+_pwgen()
+{
+  local char
+  char=${1:-32}
+  tr -dc '[:graph:]' < /dev/urandom | head -c "$char"
+  echo # end of line character, means end of string
+}
+
+pwgen "$@"

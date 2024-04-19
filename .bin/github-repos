@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import sys
+from types import SimpleNamespace
+from urllib.request import Request, urlopen
+
+DESCRIPTION = """Get the visible repositories for a given GitHub user"""
+
+
+def main(args):
+    for repository in get_all_repositories(args.user):
+        print(repository, flush=True)
+
+
+GRAPHQL_QUERY_DATA = """{
+  repositories(ownerAffiliations: OWNER, first: 30, after: $cursor) {
+   nodes {
+    name
+    description
+   }
+   pageInfo {
+    hasNextPage
+    endCursor
+   }
+  }
+}"""
+GRAPHQL_QUERY = """query ($user: String!, $cursor: String) {
+ user(login: $user) %s
+ organization(login: $user) %s
+}""" % (
+    GRAPHQL_QUERY_DATA,
+    GRAPHQL_QUERY_DATA,
+)
+
+
+def get_all_repositories(user):
+    """ Async fetch of all the visible user's repositories """
+    query_repos = query_api(GRAPHQL_QUERY)
+    graph = query_repos({"user": user})
+    yield from graph.repos()
+    while graph.has_next_page:
+        graph = query_repos({"user": user, "cursor": graph.end_cursor})
+        yield from graph.repos()
+
+
+def query_api(query):
+    def do_query(variables=None):
+        data = json.dumps({"query": query, "variables": variables})
+        request.add_header("Content-Length", len(data))
+        return GraphResponse(fetch(request, data.encode("utf-8")))
+
+    request = Request("https://api.github.com/graphql")
+    request.add_header("Content-Type", "application/json; charset=utf-8")
+    if "GITHUB_API_TOKEN" in os.environ:
+        token = os.environ["GITHUB_API_TOKEN"]
+        request.add_header("Authorization", f"token {token}")
+    else:
+        print("Environment variable GITHUB_API_TOKEN not found", file=sys.stderr)
+
+    return do_query
+
+
+def fetch(request, data=None):
+    with urlopen(request, data) as stream:
+        return json.load(stream, object_hook=lambda o: SimpleNamespace(**o))
+
+
+class Repository:
+    """ data class to map the JSON response to a domain object """
+
+    def __init__(self, node):
+        self.name = node.name
+        self.description = node.description
+
+    def __repr__(self):
+        if self.description is None:
+            return self.name
+        return f"{self.name:<30} {self.description[0:89]}"
+
+
+class GraphResponse:
+    """ data class to map the JSON response to a domain object """
+
+    def __init__(self, data):
+        try:
+            self.repositories = data.data.user.repositories
+        except TypeError:
+            self.repositories = data.data.organization.repositories
+        self.has_next_page = self.repositories.pageInfo.hasNextPage
+        self.end_cursor = self.repositories.pageInfo.endCursor
+
+    def repos(self):
+        yield from map(Repository, self.repositories.nodes)
+
+
+def parse_args(argv=sys.argv[1:]):
+    p = argparse.ArgumentParser(description=DESCRIPTION)
+    p.add_argument("user")
+    return p.parse_args(argv)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(parse_args()))
+    except KeyboardInterrupt:
+        print()

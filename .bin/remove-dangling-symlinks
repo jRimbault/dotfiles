@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+
+find_broken_symlinks()
+{
+  find "$1" -type l -xtype l
+}
+
+IFS=$'\n'
+dir=${1:-"$PWD"}
+
+for broken_link in $(find_broken_symlinks "$dir"); do
+  rm -i "$broken_link"
+done

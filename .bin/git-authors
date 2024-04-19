@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# show all committers to current branch
+
+git log --format='%an <%ae>' $* | sort -u

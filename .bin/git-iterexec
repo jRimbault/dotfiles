@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#
+# This script runs a given command over a range of Git revisions. Note that it
+# will check past revisions out! Exercise caution if there are important
+# untracked files in your working tree.
+#
+# This came from Gary Bernhardt's dotfiles:
+#   https://github.com/garybernhardt/dotfiles
+#
+# Example usage:
+#   $ git recurse 'python runtests.py' origin/master master
+
+set -e
+
+if [[ $1 == -v ]]; then
+  verbose=1
+  shift
+fi
+
+test_command="$1"
+start_ref="${2:-"HEAD~2"}"
+end_ref="${3:-"$(git rev-parse --abbrev-ref HEAD)"}"
+
+main()
+{
+  abort_if_dirty_repo
+  enforce_usage
+  run_tests
+}
+
+abort_if_dirty_repo()
+{
+  set +e
+  if ! git diff-index --quiet --cached HEAD; then
+    echo "You have staged but not committed changes that would be lost! Aborting."
+    exit 1
+  fi
+  if ! git diff-files --quiet; then
+    echo "You have unstaged changes that would be lost! Aborting."
+    exit 1
+  fi
+  untracked=$(git ls-files --exclude-standard --others)
+  if [ -n "$untracked" ]; then
+    echo "You have untracked files that could be overwritten! Aborting."
+    exit 1
+  fi
+  set -e
+}
+
+enforce_usage()
+{
+  if [ -z "$test_command" ]; then
+    usage
+    exit 1
+  fi
+}
+
+usage()
+{
+  echo "usage: $(basename "$0") 'test_command' [start_ref] [end_ref]"
+}
+
+run_tests()
+{
+  local revs
+  revs=$(log_command git rev-list --reverse "$start_ref".."$end_ref")
+
+  for rev in $revs; do
+    debug "Checking out: $(git log --oneline -1 "$rev")"
+    log_command git checkout --quiet "$rev"
+    git log HEAD --oneline --no-walk
+    log_command "$test_command"
+    log_command git reset --hard --quiet
+  done
+
+  log_command git checkout --quiet "$end_ref"
+  debug "OK for all revisions!"
+}
+
+log_command()
+{
+  debug "=> $*"
+  eval "$@"
+}
+
+debug()
+{
+  if [ $verbose ]; then
+    echo "$*" >&2
+  fi
+}
+
+# do not execute script if it is sourced or downloaded-piped to bash
+if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
+  main "$@"
+fi

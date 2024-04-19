@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+# Control character, this is not a space, it's an EM SPACE
+# U+2003
+CCHAR=' '
+# u+2007
+CDATE=' '
+
+# Branch output:
+#
+# * release/v1.1  13 days  Leyan Lo   add pretty_git_branch
+#
+# The time massaging regexes start with ^[^$CCDATE]* because that ensures that they
+# only operate before the first "$CCDATE". That "$CCDATE" will be the beginning of the
+# author name, ensuring that we don't destroy anything in the commit message
+# that looks like time.
+#
+# The log format uses $CCHAR characters between each field, and `column` is later
+# used to split on them. A $CCHAR in the commit subject or any other field will
+# break this.
+
+BRANCH_PREFIX="%(HEAD)"
+BRANCH_REF="%(color:red)%(refname:short)%(color:reset)"
+BRANCH_HASH="%(color:yellow)%(objectname:short)%(color:reset)"
+BRANCH_DATE="%(color:green)%(committerdate:relative)$CDATE%(color:reset)"
+BRANCH_AUTHOR="%(color:blue)%(authorname)%(color:reset)"
+BRANCH_CONTENTS="%(contents:subject)"
+
+BRANCH_FORMAT="$BRANCH_PREFIX$CCHAR$BRANCH_REF$CCHAR$CCHAR$BRANCH_DATE$CCHAR$BRANCH_AUTHOR$CCHAR$BRANCH_CONTENTS"
+
+pretty_git_branch_sorted()
+{
+  git branch \
+    --color=always \
+    --sort=-committerdate \
+    --format="$BRANCH_FORMAT" $* |
+    pretty_git_format
+}
+
+pretty_git_format()
+{
+  # Replace (2 years ago) with (2 years)
+  sed -Ee "s/(^[^$CDATE]*) ago$CDATE/\\1$CDATE/" |
+  # Replace (2 years, 5 months) with (2 years)
+  sed -Ee "s/(^[^$CDATE]*), [[:digit:]]+ .*months?$CDATE/\\1/" |
+  sed "s/$CDATE//" |
+  # Line columns up based on } delimiter
+  column -s "$CCHAR" -t
+}
+
+git_page_maybe()
+{
+  # Page only if we're asked to.
+  if [ -n "$GIT_NO_PAGER" ]; then
+    cat
+  else
+    # Page only if needed.
+    less --quit-if-one-screen --no-init --RAW-CONTROL-CHARS --chop-long-lines
+  fi
+}
+
+
+# do not execute script if it is sourced or downloaded-piped to bash
+if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
+  pretty_git_branch_sorted "$@"
+fi

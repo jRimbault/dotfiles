@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -e
+
+ref=${1:-"HEAD"}
+
+old=$ref@{1}
+new=$ref
+
+log()
+{
+  GIT_PAGER=cat git log --graph --pretty=short -1 $1
+}
+
+echo "Old revision:"
+log $old
+echo
+echo "New revision:"
+log $new
+echo
+echo "Changes:"
+GIT_PAGER=cat git diff --stat --summary $new $old

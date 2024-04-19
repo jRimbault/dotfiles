@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+
+import argparse
+import subprocess
+import sys
+
+
+def main(args):
+    data = GitData(args.author, args.branch, git_stats)
+    if args.readable or not sys.stdout.isatty():
+        print(data.machine_readable())
+    else:
+        print(data)
+
+
+class GitData:
+    def __init__(self, author, branch, stats):
+        self.author = author
+        self.branch = branch
+        self._parse_text(stats(author, branch))
+
+    def _parse_text(self, text):
+        value = lambda l, i: int(l[i]) if len(l) > i else 0
+        files, insertions, deletions = [], [], []
+        for line in text.split("\n"):
+            token = line.split()
+            files.append(value(token, 0))
+            insertions.append(value(token, 3))
+            deletions.append(value(token, 5))
+        self.files = sum(files)
+        self.insertions = sum(insertions)
+        self.deletions = sum(deletions)
+
+    def __repr__(self):
+        return (
+            f"{self.author} on {self.branch}\n"
+            + f"{self.files} files changed, "
+            + f"{self.insertions} insertions(+), "
+            + f"{self.deletions} deletions(-)"
+        )
+
+    def machine_readable(self):
+        return f"{self.files};{self.insertions};{self.deletions};{self.author};{self.branch}"
+
+
+def git_stats(author, branch="master"):
+    git = ["git", "log", f"--author={author}", "--shortstat", "--format=", branch]
+    return subprocess.check_output(git, universal_newlines=True)
+
+
+def git_current_branch():
+    git = "git symbolic-ref --short -q HEAD".split()
+    return subprocess.check_output(git, universal_newlines=True).strip()
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("author")
+    parser.add_argument("branch", nargs="?", default=git_current_branch())
+    parser.add_argument(
+        "--readable", "-r", action="store_true", help="machine readable format"
+    )
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(parse_args(sys.argv[1:])))
+    except KeyboardInterrupt:
+        print()
