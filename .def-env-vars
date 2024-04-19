@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+
+# this is mostly to avoid polluting my shell namespace
+get_excludes()
+{
+  local excludes ret
+  excludes=(
+    "node_modules"
+    ".pytest_cache"
+    "target"
+    ".vs"
+    ".vscode"
+    ".git"
+    ".idea"
+  )
+  ret=""
+  for dir in "${excludes[@]}"; do
+    ret="$ret -E $dir"
+  done
+  echo "$ret"
+}
+
+if command -v fd > /dev/null 2>&1; then
+  FZF_DEFAULT_COMMAND="fd -t f -H -I $(get_excludes)"
+  alias search="$FZF_DEFAULT_COMMAND"
+  export FZF_DEFAULT_COMMAND
+fi
+
+export PYTHONDONTWRITEBYTECODE="true"
+export LESS="-F -R -X"
