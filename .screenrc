@@ -1,0 +1,4 @@
+termcapinfo foot ti@:te@
+termcapinfo foot 'hs:ts=\E]2;:fs=07:ds=\E]2;screen07'
+termcapinfo alacritty ti@:te@
+termcapinfo alacritty 'hs:ts=\E]2;:fs=07:ds=\E]2;screen07'
