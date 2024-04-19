@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+alias cd="z"
+
+# filesystem
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias .....='cd ../../../..'
+alias ......='cd ../../../../..'
+
+
+# system management
+alias svi='sudoedit'
+alias svim='sudoedit'
+alias apt='sudo apt'
+alias zshconfig='$EDITOR ~/.zshrc'
+
+alias _ls='/usr/bin/ls'
+# list aliases
+function ls {
+  local command="eza --group-directories-first"
+  branch_name="$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"
+  if [[ -n "$branch_name" ]]; then
+    eval "$command --git --git-ignore $*"
+  else
+    eval "$command $*"
+  fi
+}
+# alias ls='exa --group-directories-first'
+alias lsa='ls -a'
+alias ll='ls -l'
+alias llt='ls -l --tree'
+alias lt='ls --tree'
+alias l='ls -la'
+
+# git
+alias g='git'
+alias ga='git add'
+alias gau='git add --update'
+alias gb='git branch'
+alias gc='git commit -v'
+alias gc!='git commit -v --amend'
+alias gcb='git checkout -b'
+alias gcl='git clone --recurse-submodules -j8'
+alias gco='git checkout'
+alias gd='git diff'
+alias gdw='git diff --word-diff'
+alias gf='git fetch -v --all'
+alias gl='git pull'
+alias gp='git push'
+alias gpd='git push --dry-run'
+alias gss='git status -s'
+alias gst='git status'
+alias gwch='git whatchanged -p --abbrev-commit --pretty=medium'
+alias gfb='git branch | cut -c 3- | fzf'
+alias fco='gfb | xargs git checkout'
+alias gcurrent='git rev-parse HEAD'
+
+# python
+alias pip='python3 -m pip' # debian has/had a packaging issue with pip
+alias pr='pipenv run'
+alias prp='pipenv run python'
+
+# network
+alias wanip='dig +short myip.opendns.com @resolver1.opendns.com'
+alias mirror-website="wget --mirror --convert-links --adjust-extension --page-requisites --no-parent"
+alias http-server='python3 -m http.server --bind 127.0.0.1 8080'
+
+# project management
+alias p='goto_project'
+
+# text files
+alias sed-trailing-whitespace="sed 's/[[:space:]]\\+$//'"
+alias vi='$EDITOR'
+
+# media
+alias playlist-dl='youtube-dl --extract-audio --ignore-errors --audio-format mp3 -o "%(autonumber)s - %(title)s.%(ext)s"'
+
+alias get_keystroke="xev | grep -A2 --line-buffered '^KeyRelease' | sed -n '/keycode /s/^.*keycode \([0-9]*\).* (.*, \(.*\)).*\$/\1 \2/p'"
+
+alias config='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
