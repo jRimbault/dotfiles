@@ -1,0 +1,22 @@
+[[language]]
+name = "rust"
+indent = { tab-width = 4, unit = "    " }
+
+[[language]]
+name = "python"
+language-servers = [ "pylsp" ]
+
+[language-server.pylsp.config.pylsp]
+plugins.black.enabled = true
+plugins.pylint.enabled = true
+plugins.pyflakes.enabled = false
+plugins.pycodestyle.enabled = false
+plugins.pyls_mypy.enabled = true
+plugins.pyls_mypy.live_mode = false
+plugins.isort.enabled = true
+plugins.rope_autoimport.enabled = true
+
+[language.formatter]
+command = "black"
+args = ["--line-length", "88", "--quiet", "-"]
+
