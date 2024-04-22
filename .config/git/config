@@ -6,24 +6,24 @@
 [alias]
     # list all defined aliases
 	alias = ! git config --get-regexp ^alias\\. | sed -e s/^alias\\.// -e s/\\ /\\ =\\ /
-    ## Pretty printing (call custom scripts)
-    # logging
-    l = log-pretty
-    # list branches with their last commit
-    b = branch-pretty
-
     ## Only git (no hidden deps)
     graph = log --graph --stat --decorate
     log-oneline = log --graph --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset'
     branches-sorted = branch -v --color=always --sort=-committerdate
     diff-last = diff HEAD~1
+    current = rev-parse HEAD
+    
+    a = add
+    au = add --update
     ds = diff --stat
     s = status
     ss = status --short
-    c = commit --message
-    ca = commit --amend
-    w = commit --allow-empty
-    wa = commit --amend --allow-empty
+    f = fetch -v --all
+    p = push
+    c = commit -v --message
+    ca = commit -v --amend
+    w = commit -v --allow-empty
+    wa = commit -v --amend --allow-empty
 [push]
     followTags = true
 [init]
