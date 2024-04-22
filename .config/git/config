@@ -4,6 +4,8 @@
     excludesfile = ~/.config/git/ignore
     fileMode = true
 [alias]
+    # list all defined aliases
+	alias = ! git config --get-regexp ^alias\\. | sed -e s/^alias\\.// -e s/\\ /\\ =\\ /
     ## Pretty printing (call custom scripts)
     # logging
     l = log-pretty
@@ -18,7 +20,7 @@
     ds = diff --stat
     s = status
     ss = status --short
-    c = commit
+    c = commit --message
     ca = commit --amend
     w = commit --allow-empty
     wa = commit --amend --allow-empty
