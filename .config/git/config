@@ -16,6 +16,12 @@
     branches-sorted = branch -v --color=always --sort=-committerdate
     diff-last = diff HEAD~1
     ds = diff --stat
+    s = status
+    ss = status --short
+    c = commit
+    ca = commit --amend
+    w = commit --allow-empty
+    wa = commit --amend --allow-empty
 [push]
     followTags = true
 [init]
