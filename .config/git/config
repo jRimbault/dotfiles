@@ -18,7 +18,5 @@
     ds = diff --stat
 [push]
     followTags = true
-[user]
-	name = Jacques Rimbault
 [init]
 	defaultBranch = main

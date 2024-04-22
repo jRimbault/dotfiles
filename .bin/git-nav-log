@@ -13,7 +13,7 @@ fzf:preview()
 {
   local git_cmd
   git_cmd="git -c color.ui=always show --shortstat"
-  fzf --ansi --no-mouse --preview="$git_cmd {+1}"
+  fzf --ansi --no-mouse --preview="$git_cmd {+1}" --preview-window 'right:60%:nohidden'
 }
 
 fzf:commit()
