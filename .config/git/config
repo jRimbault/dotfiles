@@ -13,6 +13,8 @@
     diff-last = diff HEAD~1
     current = rev-parse HEAD
     
+    r = log
+    read = log
     a = add
     au = add --update
     ds = diff --stat
