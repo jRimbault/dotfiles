@@ -88,7 +88,7 @@ def write(args, argv):
 @journal
 def backup(args, argv):
     yield ["git", "pull", "-r"]
-    yield ["git", "push"]
+    yield ["git", "push"] + argv
     yield ["git", "status"]
 
 
