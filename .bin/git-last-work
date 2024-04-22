@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+
+git:branches() {
+  git branch --all -r | grep -v HEAD
+}
+
+git:log_last_on_branch() {
+  branch="$1"
+  # hash="%Cred%h%Creset"
+  date="%Cgreen%ad%Creset"
+  author="%Cblue%an%Creset"
+  title="%s"
+  branchf="%C(yellow)$(basename "$branch")%Creset"
+  git -c color.ui=always log --date=short \
+      --pretty="$date $branchf $author $title" "$branch" -1
+}
+
+git:branches | while read -r branch; do
+  git:log_last_on_branch "$branch"
+done | sort -rh
+
