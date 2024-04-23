@@ -12,7 +12,7 @@
     branches-sorted = branch -v --color=always --sort=-committerdate
     diff-last = diff HEAD~1
     current = rev-parse HEAD
-    
+
     r = log
     read = log
     a = add

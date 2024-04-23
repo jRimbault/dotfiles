@@ -15,6 +15,13 @@ local lazy = require("lazy")
 lazy.setup({
     "joshdick/onedark.vim",
     "fxn/vim-monochrome",
+    {
+        'numToStr/Comment.nvim',
+        opts = {
+            -- add any options here
+        },
+        lazy = false,
+    }
 }, opts)
 
 vim.cmd([[
@@ -230,3 +237,5 @@ vim.cmd([[
   let loaded_matchparen = 1
   runtime lvimrc
 ]])
+
+require('Comment').setup()
