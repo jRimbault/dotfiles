@@ -27,7 +27,7 @@ prepend:path "$HOME/.bin"
 prepend:path "$GOBIN"
 
 
-EDITOR="$(command -v hx)"
+EDITOR="$(command -v nvim)"
 
 export N_PREFIX
 export PATH

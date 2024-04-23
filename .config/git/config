@@ -9,6 +9,8 @@
     ## Only git (no hidden deps)
     graph = log --graph --stat --decorate
     log-oneline = log --graph --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset'
+    lo = log-oneline
+    lop = log-pretty
     branches-sorted = branch -v --color=always --sort=-committerdate
     diff-last = diff HEAD~1
     current = rev-parse HEAD
