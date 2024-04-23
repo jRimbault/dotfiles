@@ -21,15 +21,15 @@ shopt -s histappend
 shopt -s checkwinsize
 
 declare -ra libs=(
-  "alias.sh"
-  "function.sh"
-  "gh.sh"
-  "theme.sh"
+  "aliases"
+  "functions"
+  "gh.function"
+  "theme.bash"
 )
 
 # Load aliases and functions
 for lib in "${libs[@]}"; do
-  lib="$HOME/.config/bash/$lib"
+  lib="$HOME/.config/shell/$lib"
   test -f "$lib" && source "$lib"
 done
 
@@ -41,5 +41,5 @@ bind -x '"\C-r":"history_fuzzy_finder"'
 # Enable variables in prompt
 shopt -s promptvars
 
-test -f ~/.def-env-vars && . ~/.def-env-vars
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
+test -f ~/.profile && . ~/.profile
