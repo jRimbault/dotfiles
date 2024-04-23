@@ -74,5 +74,5 @@ alias playlist-dl='youtube-dl --extract-audio --ignore-errors --audio-format mp3
 
 alias get_keystroke="xev | grep -A2 --line-buffered '^KeyRelease' | sed -n '/keycode /s/^.*keycode \([0-9]*\).* (.*, \(.*\)).*\$/\1 \2/p'"
 
-alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
 alias journal='/usr/bin/git --git-dir="$JOURNAL_REPO/.git" --work-tree="$JOURNAL_REPO"'

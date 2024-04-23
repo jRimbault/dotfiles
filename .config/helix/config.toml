@@ -5,7 +5,13 @@ line-number = "relative"
 mouse = false
 cursorline = true
 scrolloff = 10
-
+gutters = [
+  "diagnostics",
+  # "spacer",
+  "line-numbers",
+  # "spacer",
+  "diff",
+]
 
 [editor.cursor-shape]
 insert = "bar"
