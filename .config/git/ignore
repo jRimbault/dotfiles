@@ -14,3 +14,4 @@ lcov.info
 perf.data*
 flamegraph.svg
 target/
+.dotfiles/
