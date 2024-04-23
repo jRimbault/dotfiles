@@ -20,6 +20,7 @@ declare -ra libs=(
   "functions"
   "gh.function"
   "keybindings.zsh"
+  "env_vars"
 )
 
 # Load aliases and functions
