@@ -13,6 +13,7 @@ vim.opt.rtp:prepend(lazypath)
 
 local lazy = require("lazy")
 lazy.setup({
+    "itspriddle/vim-shellcheck",
     "navarasu/onedark.nvim",
     "fxn/vim-monochrome",
     {
