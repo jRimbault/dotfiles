@@ -17,11 +17,12 @@ lazy.setup({
     "fxn/vim-monochrome",
     {
         'numToStr/Comment.nvim',
-        opts = {
-            -- add any options here
-        },
         lazy = false,
-    }
+    },
+    {
+        "nvim-tree/nvim-tree.lua",
+        lazy = false,
+    },
 }, opts)
 
 vim.cmd([[
@@ -239,3 +240,28 @@ vim.cmd([[
 ]])
 
 require('Comment').setup()
+require("nvim-tree").setup({
+  sort = {
+    sorter = "case_sensitive",
+  },
+  view = {
+    width = 30,
+  },
+  renderer = {
+    group_empty = true,
+    icons = {
+        show = {
+            file = false,
+            folder = false,
+            folder_arrow = false,
+            git = false,
+            modified = false,
+            diagnostics = false,
+            bookmarks = false,
+        },
+    },
+  },
+  filters = {
+    dotfiles = false,
+  },
+})
