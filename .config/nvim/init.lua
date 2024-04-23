@@ -13,7 +13,7 @@ vim.opt.rtp:prepend(lazypath)
 
 local lazy = require("lazy")
 lazy.setup({
-    "joshdick/onedark.vim",
+    "navarasu/onedark.nvim",
     "fxn/vim-monochrome",
     {
         'numToStr/Comment.nvim',
@@ -22,6 +22,10 @@ lazy.setup({
     {
         "nvim-tree/nvim-tree.lua",
         lazy = false,
+    },
+    {
+        "nvim-treesitter/nvim-treesitter",
+        build = ":TSUpdate",
     },
 }, opts)
 
