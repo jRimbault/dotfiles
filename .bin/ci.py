@@ -64,7 +64,8 @@ def setup_network(name: str, address: str):
 def parse_args(argv):
     """Defines this program's options."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("path", type=Path)
+    parser.add_argument("qemu", help="path to the run_simu.sh script", type=Path)
+    parser.add_argument("integration", help="path to the integration test directory", type=Path)
     return parser.parse_args(argv)
 
 
