@@ -19,9 +19,9 @@ def main(args):
     network_ifs = setup_network("tap", "192.168.18.1/24")
     add_test_identity(args)
     with open_qemu(args, "tap"):
-        p = run_tests(args, network_ifs)
+        tests = run_tests(args, network_ifs)
     print("end of tests, `qemu-system-aarch64` should be down")
-    return p.returncode
+    return tests.returncode
 
 
 def run_tests(args, network_ifs: List[str]):
