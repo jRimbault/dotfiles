@@ -44,7 +44,7 @@ def run_tests(args, network_ifs: List[str]):
         "not fast_link",
         args.tests,
     ]
-    return subprocess.run(cmd, check=False)
+    return subprocess.run(cmd, stderr=subprocess.PIPE, check=False)
 
 
 @contextmanager
@@ -84,7 +84,7 @@ def start_qemu(args, devices: str):
             if qemu.poweroff.acquire(True):
                 reader.terminate()
                 child.communicate(b"poweroff\n")
-                time.sleep(3)
+                # time.sleep(3)
                 child.wait()
                 reader.join()
                 qemu.poweroff.release()
