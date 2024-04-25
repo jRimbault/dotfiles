@@ -3,7 +3,6 @@
 """Continuous integration script."""
 
 import argparse
-import queue
 import os
 import subprocess
 import sys
@@ -20,7 +19,7 @@ def main(args):
     pprint(vars(args))
     network_ifs = list(setup_network("tap", "192.168.18.1/24"))
     add_test_identity(args)
-    with start_qemu(args, "tap"):
+    with open_qemu(args, "tap"):
         run_tests(args, network_ifs)
     print("end of tests, `qemu-system-aarch64` should be down")
 
@@ -48,7 +47,7 @@ def run_tests(args, network_ifs: List[str]):
 
 
 @contextmanager
-def start_qemu(args, devices: str):
+def open_qemu(args, devices: str):
     """Starts qemu in another process in the background."""
 
     def background_start():
@@ -84,7 +83,6 @@ def start_qemu(args, devices: str):
             if qemu.poweroff.acquire(True):
                 reader.terminate()
                 child.communicate(b"poweroff\n")
-                # time.sleep(3)
                 child.wait()
                 reader.join()
                 qemu.poweroff.release()
