@@ -3,6 +3,7 @@
 [core]
     excludesfile = ~/.config/git/ignore
     fileMode = true
+	editor = hx
 [alias]
     # list all defined aliases
 	alias = ! git config --get-regexp ^alias\\. | sed -e s/^alias\\.// -e s/\\ /\\ =\\ /
