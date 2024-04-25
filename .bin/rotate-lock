@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+main() {
+    while true; do
+        image="$(random_xkcd)"
+        swaylock -i "$image" &
+        pid=$!
+        sleep 600
+        kill "$pid"
+    done
+}
+
+random_xkcd() {
+    find ~/Pictures/xkcd/with_text -type f -name '*.png' | shuf -n 1
+}
+
+main
