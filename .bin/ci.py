@@ -42,8 +42,8 @@ def run_tests(args, network_ifs: List[str]):
         "-x",
         "-m",
         "not fast_link",
-        # test_cases,
-        test_cases.joinpath("100_UDP", "test_100_GC_TFTP_Download_Nominal.py"),
+        test_cases,
+        # test_cases.joinpath("100_UDP", "test_100_GC_TFTP_Download_Nominal.py"),
     ]
     return subprocess.run(cmd, check=False)
 
@@ -82,18 +82,13 @@ def start_qemu(args, devices: str):
         ) as child:
             reader = Process(target=read_child, args=(child,))
             reader.start()
-            while True:
-                print("waiting for lock")
-                if qemu.poweroff.acquire(True, timeout=10):
-                    print("lock acquired, sending poweroff signals")
-                    reader.terminate()
-                    child.communicate(b"poweroff\n")
-                    print("waiting for qemu to shutdown")
-                    time.sleep(3)
-                    child.wait()
-                    reader.join()
-                    qemu.poweroff.release()
-                    break
+            if qemu.poweroff.acquire(True):
+                reader.terminate()
+                child.communicate(b"poweroff\n")
+                time.sleep(3)
+                child.wait()
+                reader.join()
+                qemu.poweroff.release()
 
     def read_child(child):
         child.stdout.read()
@@ -105,7 +100,6 @@ def start_qemu(args, devices: str):
             self.process = Process(target=target)
 
         def start(self):
-            print("starting qemu, acquiring lock")
             self.poweroff.acquire()
             self.process.start()
             # let the emulator boot up completely
@@ -115,7 +109,6 @@ def start_qemu(args, devices: str):
         def end(self):
             print("sending poweroff signal, releasing lock")
             self.poweroff.release()
-            print("lock released, waiting on join")
             self.process.join()
 
     qemu = Qemu(real_start)
