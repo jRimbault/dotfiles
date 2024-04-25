@@ -22,14 +22,14 @@ def main(args):
     add_test_identity(args)
     with start_qemu(args, "tap"):
         run_tests(args, network_ifs)
+    print("end of tests, `qemu-system-aarch64` should be down")
 
 
 def run_tests(args, network_ifs: List[str]):
     """Execute the pytest test suite."""
     if0, if1, if2 = network_ifs
-    test_cases = args.tests.joinpath("test-cases")
     cmd = [
-        args.tests.joinpath("network-setup.sh"),
+        args.test_script,
         "-c",
         if0,
         "-s",
@@ -37,13 +37,12 @@ def run_tests(args, network_ifs: List[str]):
         "-L",
         if2,
         "-p",
-        test_cases.joinpath("pnr.css"),
+        args.test_script.parent.joinpath("test-cases", "pnr.css"),
         "--",
         "-x",
         "-m",
         "not fast_link",
-        test_cases,
-        # test_cases.joinpath("100_UDP", "test_100_GC_TFTP_Download_Nominal.py"),
+        args.tests,
     ]
     return subprocess.run(cmd, check=False)
 
@@ -52,7 +51,7 @@ def run_tests(args, network_ifs: List[str]):
 def start_qemu(args, devices: str):
     """Starts qemu in another process in the background."""
 
-    def real_start():
+    def background_start():
         # send "poweroff" to stdin when we get the signal
         # from the tests they finished running
         cmd = [
@@ -91,13 +90,17 @@ def start_qemu(args, devices: str):
                 qemu.poweroff.release()
 
     def read_child(child):
+        """Qemu needs something to consume its outputs.
+
+        Else it won't anwser to various inputs.
+        """
         child.stdout.read()
         child.stderr.read()
 
     class Qemu:
-        def __init__(self, target):
+        def __init__(self):
             self.poweroff = Lock()
-            self.process = Process(target=target)
+            self.process = Process(target=background_start)
 
         def start(self):
             self.poweroff.acquire()
@@ -107,11 +110,11 @@ def start_qemu(args, devices: str):
             time.sleep(10)
 
         def end(self):
-            print("sending poweroff signal, releasing lock")
+            print("sending poweroff signal, releasing lock...")
             self.poweroff.release()
             self.process.join()
 
-    qemu = Qemu(real_start)
+    qemu = Qemu()
     qemu.start()
     try:
         yield None
@@ -160,7 +163,8 @@ def parse_args(argv):
     parser.add_argument(
         "integration", help="path to the platform-integration directory", type=Path
     )
-    parser.add_argument("tests", help="path to the test directory", type=Path)
+    parser.add_argument("test_script", help="path to the test script", type=Path)
+    parser.add_argument("tests", help="path to the tests directory", type=Path)
     parser.add_argument(
         "images", help="directory where the buildroot image is", type=Path
     )
