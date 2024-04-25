@@ -70,12 +70,11 @@ def open_qemu(args, devices: str):
             "-smp",
             "1",
         ]
-        pipe = subprocess.PIPE
         with subprocess.Popen(
             cmd,
-            stdin=pipe,
-            stderr=pipe,
-            stdout=pipe,
+            stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             cwd=args.images,
         ) as child:
             reader = Process(target=read_child, args=(child,))
