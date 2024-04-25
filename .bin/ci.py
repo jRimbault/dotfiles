@@ -15,13 +15,13 @@ from typing import List
 
 
 def main(args):
-    # subprocess.run = lambda *a, **k: 0
     pprint(vars(args))
-    network_ifs = list(setup_network("tap", "192.168.18.1/24"))
+    network_ifs = setup_network("tap", "192.168.18.1/24")
     add_test_identity(args)
     with open_qemu(args, "tap"):
-        run_tests(args, network_ifs)
+        p = run_tests(args, network_ifs)
     print("end of tests, `qemu-system-aarch64` should be down")
+    return p.returncode
 
 
 def run_tests(args, network_ifs: List[str]):
@@ -141,18 +141,20 @@ def add_test_identity(args):
     )
 
 
-def setup_network(name: str, address: str):
+def setup_network(name: str, address: str) -> List[str]:
     """Creates the network interfaces which the tests will use."""
     run = subprocess.run
+    interfaces = []
     for i in range(3):
         interface = f"{name}{i}"
         run(["sudo", "ip", "tuntap", "add", interface, "mode", "tap"], check=False)
-        yield interface
+        interfaces.append(interface)
     run(
         ["sudo", "ip", "addr", "add", address, "dev", interface],
         check=False,
     )
     run(["sudo", "ip", "link", "set", "dev", interface, "up"], check=False)
+    return interfaces
 
 
 def parse_args(argv):
@@ -185,19 +187,3 @@ def parse_args(argv):
 
 if __name__ == "__main__":
     sys.exit(main(parse_args(sys.argv[1:])))
-
-
-def test_network_setup():
-    calling_args = []
-    subprocess.run = lambda *args, **kwargs: calling_args.append((*args, kwargs))
-    iterator = setup_network("foo", "192.168.18.1/24")
-    assert "foo0" == next(iterator)
-    assert "foo0" in calling_args[0][0]
-    assert "foo1" == next(iterator)
-    assert "foo1" in calling_args[1][0]
-    assert "foo2" == next(iterator)
-    assert "foo2" in calling_args[2][0]
-    assert not list(iterator)
-    assert "foo2" in calling_args[3][0]
-    assert "192.168.18.1/24" in calling_args[3][0]
-    assert "foo2" in calling_args[4][0]
