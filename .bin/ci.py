@@ -95,6 +95,14 @@ def open_qemu(args, devices: str):
         child.stderr.read()
 
     class Qemu:
+        """Synchronising type.
+        
+        This class concerns itself only with synchronising the background
+        process with the rest of the script.
+
+        It should keep alive the emulator only as long as the context manager.
+        """
+
         def __init__(self):
             self.poweroff = Lock()
             self.process = Process(target=background_start)
