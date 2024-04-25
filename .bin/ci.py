@@ -55,7 +55,7 @@ def start_qemu(args, devices: str):
         # send "poweroff" to stdin when we get the signal
         # from the tests they finished running
         cmd = [
-            args.integration.joinpath(
+            args.platform_integration.joinpath(
                 "buildroot_external",
                 "board",
                 "qemu",
@@ -124,7 +124,7 @@ def start_qemu(args, devices: str):
 
 def add_test_identity(args):
     """We need to ensure we have the right to login via SSH into the SUT."""
-    key = args.integration.joinpath(
+    key = args.platform_integration.joinpath(
         "buildroot_external",
         "board",
         "qemu",
@@ -159,16 +159,30 @@ def setup_network(name: str, address: str):
 
 def parse_args(argv):
     """Defines this program's options."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "integration", help="path to the platform-integration directory", type=Path
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("test_script", help="path to the test script", type=Path)
-    parser.add_argument("tests", help="path to the tests directory", type=Path)
+    pr_metavar = "PR_PLATFORM_INTEGRATION_REPOSITORY_PATH"
+    pr = os.environ.get(pr_metavar)
+    parser.add_argument(
+        "--platform-integration",
+        metavar=pr_metavar,
+        help="path to the platform-integration directory",
+        type=Path,
+        required=pr is None,
+        default=pr,
+    )
     parser.add_argument(
         "images", help="directory where the buildroot image is", type=Path
     )
-    return parser.parse_args(argv)
+    parser.add_argument("test_script", help="path to the test script", type=Path)
+    parser.add_argument("tests", help="path to the tests directory", type=Path)
+    args = parser.parse_args(argv)
+    args.platform_integration = args.platform_integration.absolute()
+    args.images = args.images.absolute()
+    args.test_script = args.test_script.absolute()
+    args.tests = args.tests.absolute()
+    return args
 
 
 if __name__ == "__main__":
