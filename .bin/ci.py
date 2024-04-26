@@ -80,26 +80,18 @@ def open_qemu(args, devices: str):
             stdout=subprocess.PIPE,
             cwd=args.images,
         ) as child:
-            reader = Process(target=read_child, args=(child,))
-            reader.start()
-            if qemu.poweroff.acquire(True):
-                reader.terminate()
-                child.communicate(b"poweroff\n")
-                child.wait()
-                reader.join()
-                qemu.poweroff.release()
-
-    def read_child(child):
-        """Qemu needs something to consume its outputs.
-
-        Else it won't anwser to various inputs.
-        """
-        child.stdout.read()
-        child.stderr.read()
+            with (
+                consumer(child.stdout, args.qemu_stdout),
+                consumer(child.stderr, args.qemu_stderr),
+            ):
+                if qemu.poweroff.acquire(True):
+                    child.communicate(b"poweroff\n")
+                    child.wait()
+                    qemu.poweroff.release()
 
     class Qemu:
         """Synchronising type.
-        
+
         This class concerns itself only with synchronising the background
         process with the rest of the script.
 
@@ -118,7 +110,6 @@ def open_qemu(args, devices: str):
             time.sleep(10)
 
         def end(self):
-            print("sending poweroff signal, releasing lock...")
             self.poweroff.release()
             self.process.join()
 
@@ -128,6 +119,27 @@ def open_qemu(args, devices: str):
         yield None
     finally:
         qemu.end()
+
+
+@contextmanager
+def consumer(reader, writer):
+    """Qemu needs something to consume its outputs.
+
+    Else it won't anwser to various inputs.
+    """
+
+    def read(stdio, out):
+        with open(out, "w", encoding="utf8") as out:
+            while line := stdio.readline():
+                print(line.decode("utf8").strip(), file=out)
+
+    p = Process(target=read, args=(reader, writer))
+    p.start()
+    try:
+        yield p
+    finally:
+        p.terminate()
+        p.join()
 
 
 def add_test_identity(args):
@@ -187,6 +199,18 @@ def parse_args(argv):
     )
     parser.add_argument("test_script", help="path to the test script", type=Path)
     parser.add_argument("tests", help="path to the tests directory", type=Path)
+    parser.add_argument(
+        "--qemu-stdout",
+        help="where to redirect qemu's stdout",
+        type=Path,
+        default=Path("qemu-stdout.txt"),
+    )
+    parser.add_argument(
+        "--qemu-stderr",
+        help="where to redirect qemu's stderr",
+        type=Path,
+        default=Path("qemu-stderr.txt"),
+    )
     args = parser.parse_args(argv)
     args.platform_integration = args.platform_integration.absolute()
     args.images = args.images.absolute()
