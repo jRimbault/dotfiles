@@ -101,9 +101,9 @@ def consumer(reader, writer):
     """
 
     def read(stdio, out):
-        with open(out, "w", encoding="utf8") as out:
+        with open(out, "w", encoding="utf8") as f:
             while line := stdio.readline():
-                print(line.decode("utf8").strip(), file=out)
+                print(line.decode("utf8").strip(), file=f)
 
     p = Process(target=read, args=(reader, writer))
     p.start()
