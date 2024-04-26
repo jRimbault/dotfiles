@@ -21,7 +21,7 @@ def main(args):
     add_test_identity(args)
     # 2. use a context manager to ensure the emulated device stays alive
     #    during the tests and killed after the tests
-    with open_qemu(args, "tap"):
+    with Qemu(args, "tap"):
         # 3. run the actual tests
         tests = run_tests(args, network_ifs)
     return tests.returncode
@@ -49,76 +49,48 @@ def run_tests(args, network_ifs: List[str]):
     return subprocess.run(cmd, stderr=subprocess.PIPE, check=False)
 
 
-@contextmanager
-def open_qemu(args, devices: str):
-    """Starts qemu in another process in the background."""
+def start_qemu(args, devices, poweroff):
+    """Starts qemu.
 
-    def background_start():
-        # send "poweroff" to stdin when we get the signal
-        # from the tests they finished running
-        cmd = [
-            args.platform_integration.joinpath(
-                "buildroot_external",
-                "board",
-                "qemu",
-                "aarch64-virt",
-                "scripts",
-                "run_simu.sh",
-            ),
-            "-gicv3",
-            "-netdev",
-            devices,
-            "-dtb",
-            "pnc_virt.dtb",
-            "-smp",
-            "1",
-        ]
-        with subprocess.Popen(
+    Args:
+        args:      this script's arguments
+        devices:   base name of network devices, eg: "tap"
+        poweroff:  a `multiprocessing.Lock` to signal when to shutoff qemu
+    """
+    # send "poweroff" to stdin when we get the signal
+    # from the tests they finished running
+    cmd = [
+        args.platform_integration.joinpath(
+            "buildroot_external",
+            "board",
+            "qemu",
+            "aarch64-virt",
+            "scripts",
+            "run_simu.sh",
+        ),
+        "-gicv3",
+        "-netdev",
+        devices,
+        "-dtb",
+        "pnc_virt.dtb",
+        "-smp",
+        "1",
+    ]
+    with (
+        subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
             cwd=args.images,
-        ) as child:
-            with (
-                consumer(child.stdout, args.qemu_stdout),
-                consumer(child.stderr, args.qemu_stderr),
-            ):
-                if qemu.poweroff.acquire(True):
-                    child.communicate(b"poweroff\n")
-                    child.wait()
-                    qemu.poweroff.release()
-
-    class Qemu:
-        """Synchronising type.
-
-        This class concerns itself only with synchronising the background
-        process with the rest of the script.
-
-        It should keep alive the emulator only as long as the context manager.
-        """
-
-        def __init__(self):
-            self.poweroff = Lock()
-            self.process = Process(target=background_start)
-
-        def start(self):
-            self.poweroff.acquire()
-            self.process.start()
-            # let the emulator boot up completely
-            print("waiting for qemu to boot up")
-            time.sleep(10)
-
-        def end(self):
-            self.poweroff.release()
-            self.process.join()
-
-    qemu = Qemu()
-    qemu.start()
-    try:
-        yield None
-    finally:
-        qemu.end()
+        ) as child,
+        consumer(child.stdout, args.qemu_stdout),
+        consumer(child.stderr, args.qemu_stderr),
+    ):
+        if poweroff.acquire(True):
+            child.communicate(b"poweroff\n")
+            child.wait()
+            poweroff.release()
 
 
 @contextmanager
@@ -140,6 +112,31 @@ def consumer(reader, writer):
     finally:
         p.terminate()
         p.join()
+
+
+class Qemu:
+    """Synchronising type.
+
+    This class concerns itself only with synchronising the background
+    process with the rest of the script.
+
+    It should keep alive the emulator only as long as the context manager.
+    """
+
+    def __init__(self, args, devices):
+        self.poweroff = Lock()
+        self.process = Process(target=start_qemu, args=(args, devices, self.poweroff))
+
+    def __enter__(self):
+        self.poweroff.acquire()
+        self.process.start()
+        # let the emulator boot up completely
+        print("waiting for qemu to boot up")
+        time.sleep(10)
+
+    def __exit__(self, _type, _value, _traceback):
+        self.poweroff.release()
+        self.process.join()
 
 
 def add_test_identity(args):
