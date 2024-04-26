@@ -16,11 +16,14 @@ from typing import List
 
 def main(args):
     pprint(vars(args))
+    # 1. setup the pre requisites to communicate with the emulated device
     network_ifs = setup_network("tap", "192.168.18.1/24")
     add_test_identity(args)
+    # 2. use a context manager to ensure the emulated device stays alive
+    #    during the tests and killed after the tests
     with open_qemu(args, "tap"):
+        # 3. run the actual tests
         tests = run_tests(args, network_ifs)
-    print("end of tests, `qemu-system-aarch64` should be down")
     return tests.returncode
 
 
