@@ -36,3 +36,10 @@ _history_fuzzy_finder()
 }
 zle -N _history_fuzzy_finder
 bindkey ^r _history_fuzzy_finder
+
+_zsh_cli_fg() {
+    fg
+}
+zle -N _zsh_cli_fg
+bindkey ^z _zsh_cli_fg
+

@@ -1,5 +1,9 @@
+[ui]
+ssh = ssh -C -i ~/.ssh/id_ecdsa
+
 [extensions]
 color =
+rebase =
 
 [color]
 custom.rev = yellow

@@ -10,10 +10,6 @@ ZSH_THEME="symbols"
 
 plugins=()
 
-_zsh_cli_fg() { fg; }
-zle -N _zsh_cli_fg
-bindkey '^Z' _zsh_cli_fg
-
 source "$ZSH/oh-my-zsh.sh"
 declare -ra libs=(
   "aliases"
