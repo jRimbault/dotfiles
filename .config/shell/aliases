@@ -22,7 +22,7 @@ function ls {
   local command="eza --group-directories-first"
   branch_name="$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"
   if [[ -n "$branch_name" ]]; then
-    eval "$command --git --git-ignore $*"
+    eval "$command --git $*"
   else
     eval "$command $*"
   fi
@@ -76,3 +76,4 @@ alias get_keystroke="xev | grep -A2 --line-buffered '^KeyRelease' | sed -n '/key
 
 alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
 alias journal='/usr/bin/git --git-dir="$JOURNAL_REPO/.git" --work-tree="$JOURNAL_REPO"'
+alias bat="bat -p"

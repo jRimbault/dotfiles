@@ -75,7 +75,7 @@ vim.cmd([[
 
   " Limit to 80 columns
   set winwidth=79
-  set textwidth=79
+  " set textwidth=79
   " Spaces are the way
   set shiftwidth=4
   set tabstop=4
