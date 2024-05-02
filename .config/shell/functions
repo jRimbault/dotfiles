@@ -151,28 +151,27 @@ __remove_base_dir()
 #  - "find "$1" -name .git -type d -prune | xargs -n 1 dirname" 0.8s
 #  - "find "$1" -type d -exec test -e '{}/.git' ';' -print -prune" 1.1s
 # you really can't beat sed
+# PS: oooh I should have tried in native shell, didn't think of that at the time
 find_git_repos()
 {
   if command -v fd > /dev/null 2>&1; then
     fd .git "$1" -HI -t d |
-      __remove_trailing_dotgit |
-      __remove_base_dir "$1/" | uniq
-    return $?
+        __remove_trailing_dotgit |
+        __remove_base_dir "$1/" | uniq
+  else
+    find "$1" -name .git -type d -prune |
+        __remove_trailing_dotgit |
+        __remove_base_dir "$1/" | uniq
   fi
-  find "$1" -name .git -type d -prune |
-    __remove_trailing_dotgit |
-    __remove_base_dir "$1/" | uniq
 }
 
 # fuzzy projects finder
 goto_project()
 {
-  local dest base_dir
-  GH_BASE_DIR=${GH_BASE_DIR:-"$HOME/Documents"}
-  base_dir="$(dirname "$GH_BASE_DIR")"
-  dest="$(find_git_repos "$base_dir" | fzf --ansi | cut -d: -f1 | cut -d\  -f1)"
+  local dest
+  dest="$(find_git_repos "$HOME/Documents" | fzf --ansi | cut -d: -f1 | cut -d\  -f1)"
   [ -z "$dest" ] && return 0
-  cd "$base_dir/$dest" || return 1
+  cd "$HOME/Documents/$dest" || return 1
 }
 
 pvi()
