@@ -168,10 +168,11 @@ find_git_repos()
 # fuzzy projects finder
 goto_project()
 {
-  local dest
-  dest="$(find_git_repos "$HOME/Documents" | fzf --ansi | cut -d: -f1 | cut -d\  -f1)"
+  local dest prev_d
+  base="$HOME/Documents"
+  dest="$(find_projects.py "$base" | fzf)"
   [ -z "$dest" ] && return 0
-  cd "$HOME/Documents/$dest" || return 1
+  cd "$base/$dest"
 }
 
 pvi()

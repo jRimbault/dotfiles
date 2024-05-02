@@ -30,8 +30,8 @@ function ls {
 # alias ls='exa --group-directories-first'
 alias lsa='ls -a'
 alias ll='ls -l'
-alias llt='ls -l --tree'
-alias lt='ls --tree'
+alias llt='ls -l --tree --git-ignore'
+alias lt='ls -a --tree --git-ignore'
 alias l='ls -la'
 
 # git
