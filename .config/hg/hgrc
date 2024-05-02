@@ -2,6 +2,7 @@
 ssh = ssh -C -i ~/.ssh/id_ecdsa
 
 [extensions]
+fetch =
 color =
 rebase =
 
