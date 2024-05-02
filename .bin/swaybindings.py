@@ -29,7 +29,7 @@ def parse_config():
         token = next(t.strip("'") for t in action.split(" ") if t.strip("'")[0] == "$")
         return action.replace(token, variables[token])
 
-    config = Path.home().joinpath(".config", "sway", "config")
+    config = Path.home() / ".config" / "sway" / "config"
     variables = {}
     bindings = {}
     MODIFIER = "Super"
