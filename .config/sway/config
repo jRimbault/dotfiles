@@ -107,10 +107,10 @@ set $exit_mode exit: [l]ogout, [r]eboot, [s]leep, [p]oweroff
 mode '$exit_mode' {
     bindsym l exec 'swaymsg exit'
     bindsym r exec 'systemctl reboot'
-    bindsym s exec 'systemctl suspend'; mode "default"
+    bindsym s exec 'systemctl suspend'; mode default
     bindsym p exec 'systemctl poweroff'
-    bindsym Escape mode "default"
-    bindsym Return mode "default"
+    bindsym Escape mode default
+    bindsym Return mode default
 }
 bindsym $mod+x mode '$exit_mode'
 
@@ -183,14 +183,14 @@ bindsym $mod+b splith
 bindsym $mod+v splitv
 
 # Switch the current container between different layout styles
-set $layout_mode layout [s]tacking, [t]abbed, [n]ormal
+set $layout_mode layout: [s]tacking, [t]abbed, [n]ormal
 mode '$layout_mode' {
     bindsym s layout stacking
     bindsym t layout tabbed
     bindsym n layout toggle split
 
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
+    bindsym Return mode default
+    bindsym Escape mode default
 }
 bindsym $mod+alt+l mode '$layout_mode'
 
@@ -236,8 +236,8 @@ mode '$resize_mode' {
     bindsym Right resize grow width 10px
 
     # Return to default mode
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
+    bindsym Return mode default
+    bindsym Escape mode default
 }
 bindsym $mod+r mode '$resize_mode'
 
@@ -264,14 +264,14 @@ bar {
 }
 
 # Screenshot mode
-set $screenshot_mode screenshot [w]indow, [s]creen, [a]rea
+set $screenshot_mode screenshot: [w]indow, [s]creen, [a]rea
 mode '$screenshot_mode' {
-    bindsym w exec grimshot copy active; mode "default"
-    bindsym s exec grimshot copy output; mode "default"
-    bindsym a exec grimshot copy area; mode "default"
+    bindsym w exec grimshot copy active; mode default
+    bindsym s exec grimshot copy output; mode default
+    bindsym a exec grimshot copy area; mode default
 
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
+    bindsym Return mode default
+    bindsym Escape mode default
 }
 bindsym $mod+s mode '$screenshot_mode'
 
