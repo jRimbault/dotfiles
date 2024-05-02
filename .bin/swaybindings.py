@@ -18,6 +18,13 @@ class Config:
 
 
 def parse_config():
+    """This is a bit shameful.
+
+    It wasn't meant to be a real parser at the beginning.
+    It devolved into _this_. I'm sorry.
+    Someday I'll replace it with a real adult parser.
+    """
+
     def interpret(action, variables):
         token = next(t.strip("'") for t in action.split(" ") if t.strip("'")[0] == "$")
         return action.replace(token, variables[token])
