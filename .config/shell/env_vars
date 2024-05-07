@@ -16,7 +16,7 @@ get_excludes()
   )
   ret=""
   for dir in "${excludes[@]}"; do
-    ret="$ret -E $dir"
+    ret+="-E $dir "
   done
   echo "$ret"
 }

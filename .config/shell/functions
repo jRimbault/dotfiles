@@ -240,3 +240,11 @@ swap_symlink_for_copy()
     shift
   done
 }
+
+random_data_file()
+{
+    local dest size
+    dest="${1:-/dev/null}"
+    size="${2:-1}"
+    dd if=/dev/urandom bs=1M count=$size | pv > "$dest"
+}

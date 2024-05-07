@@ -1,7 +1,4 @@
 #!/usr/bin/env zsh
-export LC_ALL=en_US.UTF-8
-export LANG=en_US.UTF-8
-COMPLETION_WAITING_DOTS=0
 umask 022
 export ZSH="$HOME/.oh-my-zsh"
 
@@ -21,7 +18,7 @@ declare -ra libs=(
 
 # Load aliases and functions
 for lib in "${libs[@]}"; do
-  lib="$HOME/.config/shell/$lib"
+  lib="$ZSH_CUSTOM/$lib"
   test -f "$lib" && source "$lib"
 done
 autoload -z edit-command-line

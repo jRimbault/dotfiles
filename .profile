@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-test -f ~/.env && source ~/.env
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
 
 # Environment variables :
 N_PREFIX="$HOME/.local/n"

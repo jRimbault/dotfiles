@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 
 main() {
+    xkcds="$(find ~/Pictures/xkcd/with_text -type f -name '*.png')"
     while true; do
-        image="$(random_xkcd)"
-        swaylock -i "$image" &
-        pid=$!
-        sleep 600
-        kill "$pid"
+       image="$(echo "$xkcds" | shuf -n 1)"
+       # don't use the daemonize option, it will fork itself
+       # and then killing it is harder
+       swaylock -i "$image" &
+       pid=$!
+       sleep 600
+       kill "$pid"
     done
 }
 
