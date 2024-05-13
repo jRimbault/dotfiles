@@ -27,6 +27,16 @@ lazy.setup({
     {
         "nvim-treesitter/nvim-treesitter",
         build = ":TSUpdate",
+        config = function ()
+            local configs = require("nvim-treesitter.configs")
+
+            configs.setup({
+                ensure_installed = { "c", "lua", "vim", "vimdoc", "query", "elixir", "heex", "javascript", "html" },
+                sync_install = false,
+                highlight = { enable = true },
+                indent = { enable = true },
+            })
+        end,
     },
 }, opts)
 
@@ -119,6 +129,7 @@ vim.cmd([[
     autocmd FileType javascript,ruby,haml,eruby,yaml,html,sass,cucumber, set ai sw=2 sts=2 et
     " for python, autoindent with four spaces, always expand tabs
     autocmd FileType python,c,cpp,h,php set ai sw=4 sts=4 et
+    autocmd FileType python colorscheme onedark
 
     autocmd! BufRead,BufNewFile *.sass setfiletype sass
 
@@ -270,3 +281,4 @@ require("nvim-tree").setup({
     dotfiles = false,
   },
 })
+
