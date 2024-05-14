@@ -12,6 +12,7 @@ custom.author = blue
 custom.date = green
 
 [alias]
+undo = revert --no-backup
 l = log
 lo = log --template "{label('custom.rev', node|short)} {label('custom.date', date(date, '%Y-%m-%d %H:%M'))} {label('custom.author', author|person)} {desc|strip|firstline}\n"
 
