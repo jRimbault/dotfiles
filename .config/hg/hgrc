@@ -15,4 +15,4 @@ custom.date = green
 undo = revert --no-backup
 l = log
 lo = log --template "{label('custom.rev', node|short)} {label('custom.date', date(date, '%Y-%m-%d %H:%M'))} {label('custom.author', author|person)} {desc|strip|firstline}\n"
-
+last-work = branches --template "{label('custom.date', date(date, '%Y-%m-%d %H:%M'))} {label('custom.rev', branch)} {label('custom.author', author|person)}\n"
