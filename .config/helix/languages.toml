@@ -19,4 +19,6 @@ plugins.rope_autoimport.enabled = true
 
 [language.formatter]
 command = "bash"
-args = ["-c", "isort --profile black - | black --line-length 88 --quiet -"]
+args = [
+    "-c", "isort --profile black - | black --line-length 88 --quiet - | sed 's/[ \t]*$//' -"
+]
