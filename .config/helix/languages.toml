@@ -4,6 +4,7 @@ indent = { tab-width = 4, unit = "    " }
 
 [[language]]
 name = "python"
+auto-format = true
 language-servers = [ "pylsp" ]
 
 [language-server.pylsp.config.pylsp]
