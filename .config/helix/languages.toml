@@ -17,6 +17,5 @@ plugins.isort.enabled = true
 plugins.rope_autoimport.enabled = true
 
 [language.formatter]
-command = "black"
-args = ["--line-length", "88", "--quiet", "-"]
-
+command = "bash"
+args = ["-c", "isort --profile black - | black --line-length 88 --quiet -"]
