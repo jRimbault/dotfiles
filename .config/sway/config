@@ -54,6 +54,8 @@ bindsym $mod+l exec $lock
 
 ### Input configuration
 #
+#   `swaymsg -t get_inputs`
+#
 # Example configuration:
 #
 #   input "2:14:SynPS/2_Synaptics_TouchPad" {
