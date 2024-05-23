@@ -39,12 +39,18 @@ set $bg_lock /home/jrimbault/.config/backgrounds/shape-darkened.jpg
 
 ### Output configuration
 set $laptop_display eDP-1
-set $desk_display_1 DP-1
+set $desk_display DP-1
 
 output * bg '$bg' fill
 
-output '$desk_display' resolution 2560x1440 position 0,0
-output '$laptop_display' resolution 1920x1080 position 320,1440
+output $laptop_display {
+    resolution 1920x1080
+    position 320 1440
+}
+output $desk_display {
+    resolution 2560x1440
+    position 0 0
+}
 
 ### Idle configuration
 set $lock xkcd_lock
