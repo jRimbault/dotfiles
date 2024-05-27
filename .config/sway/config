@@ -34,14 +34,13 @@ set $8 underscore
 set $9 ccedilla
 set $0 agrave
 
-set $bg /home/jrimbault/.config/backgrounds/shape.jpg
-set $bg_lock /home/jrimbault/.config/backgrounds/shape-darkened.jpg
+set $bg /home/jrimbault/.config/sway/wallpaper
 
 ### Output configuration
 set $laptop_display eDP-1
 set $desk_display DP-1
 
-output * bg '$bg' fill
+output * background $bg fill
 
 output $laptop_display {
     resolution 1920x1080
