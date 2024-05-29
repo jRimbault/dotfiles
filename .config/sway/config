@@ -156,7 +156,7 @@ workspace 6 output $laptop_display
 workspace 7 output $laptop_display
 workspace 8 output $desk_display
 workspace 9 output $desk_display
-workspace 0 output $desk_display
+workspace 10 output $desk_display
 
 # Switch to workspace
 bindsym $mod+$1 workspace number 1
