@@ -5,6 +5,7 @@ ssh = ssh -C -i ~/.ssh/id_ecdsa
 fetch =
 color =
 rebase =
+closehead =
 
 [color]
 custom.rev = yellow
