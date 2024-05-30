@@ -1,12 +1,14 @@
 [include]
     path = ~/.gitconfig_local
+
 [core]
     excludesfile = ~/.config/git/ignore
     fileMode = true
-	editor = hx
+    editor = hx
+
 [alias]
     # list all defined aliases
-	alias = ! git config --get-regexp ^alias\\. | sed -e s/^alias\\.// -e s/\\ /\\ =\\ /
+    alias = ! git config --get-regexp ^alias\\. | sed -e s/^alias\\.// -e s/\\ /\\ =\\ /
     ## Only git (no hidden deps)
     graph = log --graph --stat --decorate
     log-oneline = log --graph --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset'
@@ -29,7 +31,9 @@
     ca = commit -v --amend
     w = commit -v --allow-empty
     wa = commit -v --amend --allow-empty
+
 [push]
     followTags = true
+
 [init]
-	defaultBranch = main
+    defaultBranch = main
