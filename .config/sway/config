@@ -53,8 +53,7 @@ output $desk_display {
 
 ### Idle configuration
 set $lock xkcd_lock
-exec swayidle -w timeout 600 '$lock' before-sleep '$lock'
-exec swayidle -w timeout 3600 'systemctl suspend'
+exec swayidle -w timeout 600 '$lock' before-sleep '$lock' -w timeout 3600 'systemctl suspend'
 bindsym $mod+l exec $lock
 
 ### Input configuration
@@ -195,6 +194,8 @@ bindsym $mod+Control+Shift+Up move workspace to output up
 # respectively.
 bindsym $mod+b splith
 bindsym $mod+v splitv
+exec --no-startup-id swaymgr
+bindsym $mod+i exec swaymgr -s 'set spiral'
 
 # Switch the current container between different layout styles
 set $layout_mode layout: [s]tacking, [t]abbed, [n]ormal
