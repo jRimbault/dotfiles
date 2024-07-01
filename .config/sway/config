@@ -53,7 +53,10 @@ output $desk_display {
 
 ### Idle configuration
 set $lock xkcd_lock
-exec swayidle -w timeout 600 '$lock' before-sleep '$lock' -w timeout 3600 'systemctl suspend'
+exec swayidle -w \
+    timeout  600 '$lock --daemonize' \
+    timeout 3600 'systemctl suspend' \
+    before-sleep '$lock --daemonize'
 bindsym $mod+l exec $lock
 
 ### Input configuration
