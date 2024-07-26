@@ -1,2 +1,6 @@
 .ropeproject/
 .gitlab-ci-local/
+*.local
+*.egg-info/
+.vscode/
+.idea/

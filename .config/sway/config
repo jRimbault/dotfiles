@@ -43,11 +43,11 @@ set $desk_display DP-1
 output * background $bg fill
 
 output $laptop_display {
-    resolution 1920x1080
+    mode 1920x1080@59.999Hz
     position 320 1440
 }
 output $desk_display {
-    resolution 2560x1440
+    mode 2560x1440@60Hz
     position 0 0
 }
 

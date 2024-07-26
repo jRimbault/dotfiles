@@ -25,6 +25,7 @@ prepend:path "$HOME/.gem/ruby/2.5.0/bin"
 prepend:path "$N_PREFIX/bin"
 prepend:path "$HOME/.local/bin"
 prepend:path "$HOME/.bin"
+prepend:path "$HOME/bin"
 prepend:path "$GOBIN"
 
 
@@ -33,4 +34,9 @@ EDITOR="$(command -v nvim)"
 export N_PREFIX
 export PATH
 export EDITOR
+
+
+
+# Added by Toolbox App
+export PATH="$PATH:/home/jrimbault/.local/share/JetBrains/Toolbox/scripts"
 
