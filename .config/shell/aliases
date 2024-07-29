@@ -77,3 +77,9 @@ alias get_keystroke="xev | grep -A2 --line-buffered '^KeyRelease' | sed -n '/key
 alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
 alias journal='/usr/bin/git --git-dir="$JOURNAL_REPO/.git" --work-tree="$JOURNAL_REPO"'
 alias bat="bat -p"
+
+# ssh tunnelling aliases
+alias tunnel-up='ssh -fNTM'
+alias tunnel-status='ssh -TO check'
+alias tunnel-down='ssh -TO exit'
+

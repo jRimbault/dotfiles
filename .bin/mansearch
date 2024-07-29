@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+set -eu
+
+main()
+{
+  query="${1:-}"
+  page="$(man:list_pages | rg:extract_name | fzf:preview "$query")"
+  man "$page"
+}
+
+man:list_pages()
+{
+  man -k .
+}
+
+rg:extract_name()
+{
+  rg --no-heading -o "^[^ ]+" | sort -u
+}
+
+fzf:preview()
+{
+  fzf --preview="man {}" --preview-window=80% --query="$1"
+}
+
+if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
+  export LESS="-F -R -X"
+  export PAGER="less"
+  export LESS_TERMCAP_mb=$'\e[36m'
+  export LESS_TERMCAP_md=$'\e[36m'
+  export LESS_TERMCAP_me=$'\e[0m'
+  export LESS_TERMCAP_se=$'\e[0m'
+  export LESS_TERMCAP_so=$'\e[1m'
+  export LESS_TERMCAP_ue=$'\e[0m'
+  export LESS_TERMCAP_us=$'\e[31m'
+  main "$@"
+fi

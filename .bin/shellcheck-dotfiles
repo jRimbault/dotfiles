@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+IFS=$'\n'
+for script in $(find . -type f -exec grep -Il '^#!.*bash' {} \;); do
+    shellcheck "$script"
+done

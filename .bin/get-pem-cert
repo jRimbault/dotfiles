@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+get_pem_cert()
+{
+  openssl:info "$1" | openssl:extract_pem | grep:certifacte
+}
+
+openssl:info()
+{
+  openssl s_client -connect "$1":443 < /dev/null 2> /dev/null
+}
+
+openssl:extract_pem()
+{
+  openssl x509 -inform pem -text
+}
+
+grep:certifacte()
+{
+  grep --color=never -Pzo '.*BEGIN CERTIFICATE(.*\n)*'
+}
+
+get_pem_cert "$@"

@@ -14,12 +14,12 @@ minimal_vcs() {
   local stat_color="%{${fg[white]}%}" # assume it is clean
   local branch_name
 
-  branch_name="$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"
+  branch_name="$(git rev-parse --abbrev-ref HEAD 2> /dev/null || hg branch 2> /dev/null)"
   if [[ -n "$branch_name" ]]; then
     if [[ -n "$(git status --porcelain 2> /dev/null)" ]]; then
       stat_color="%{${fg[red]}%}"
     fi
-    echo -n " $stat_color$branch_name%{$reset_color%}"
+    print -r " $stat_color$branch_name%{$reset_color%}"
   fi
 }
 
@@ -50,18 +50,18 @@ current_path() {
     fi
   done
 
-  echo -n "$_g${(j:/:)cwd//\//$_w/$_g}$_w"
+  print -r "$_g${(j:/:)cwd//\//$_w/$_g}$_w"
 }
 
 status_prompt() {
   # ternary expression, check last command status
-  echo "%(?:%{${fg[green]}%}$1:%{${fg[red]}%}$1)$reset_color"
+  print -r "%(?:%{${fg[green]}%}$1:%{${fg[red]}%}$1)$reset_color"
 }
 
 prompt() {
-  echo "$_USER_CHAR $(status_prompt "$_INSERT_CHAR") "
+  print -r "$_USER_CHAR $(status_prompt "$_INSERT_CHAR") "
 }
 
 # single quotes to evaluate at runtime, not source time
 PROMPT='$(prompt)'
-#RPROMPT='$(current_path)$(minimal_vcs)'
+RPROMPT='$(current_path)$(minimal_vcs)'

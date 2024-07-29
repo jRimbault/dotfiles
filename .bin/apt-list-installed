@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+main()
+{
+  dpkg:list | rg:filter  
+}
+
+dpkg:list()
+{
+  dpkg --no-pager --get-selections
+}
+
+rg:filter()
+{
+  rg --color=never \
+    --no-heading \
+    --only-matching \
+    '^([\w_\-:\.+\d]+)\s+install' \
+    --replace '$1'
+}
+
+main

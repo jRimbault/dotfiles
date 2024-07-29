@@ -22,3 +22,8 @@ command = "bash"
 args = [
     "-c", "isort --profile black - | black --line-length 88 --quiet - | sed 's/[ \t]*$//' -"
 ]
+
+[[language]]
+name = "yaml"
+file-types = ["yaml", "yml"]
+auto-format = true

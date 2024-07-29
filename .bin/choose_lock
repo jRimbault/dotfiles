@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+set -eu
+
+image="$(fd . "$HOME/Pictures/xkcd/with_text" | fzf)"
+swaylock -i "$image" -s center --ignore-empty-password --show-failed-attempts
