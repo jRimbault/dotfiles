@@ -83,3 +83,4 @@ alias tunnel-up='ssh -fNTM'
 alias tunnel-status='ssh -TO check'
 alias tunnel-down='ssh -TO exit'
 
+alias github="/usr/bin/gh"
