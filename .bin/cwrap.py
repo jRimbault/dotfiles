@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from queue import Empty, Queue
 from threading import Thread
@@ -17,59 +18,68 @@ class Opt:
     num_lines: int
 
 
+HR = "-" * 12
+
+
 def main(args: Opt):
-    proc = subprocess.Popen(
-        args.command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=True,
-        bufsize=1,
-        universal_newlines=True,
-    )
-
-    q: Queue[Tuple[str, TextIO]] = Queue()
-
-    t_stdout = Thread(target=enqueue_output, args=(proc.stdout, q, sys.stdout))
-    t_stderr = Thread(target=enqueue_output, args=(proc.stderr, q, sys.stderr))
-    t_stdout.daemon = True
-    t_stderr.daemon = True
-    t_stdout.start()
-    t_stderr.start()
-
-    start_time = time.time()
-    output_lines: list[Tuple[str, TextIO]] = []
-    hr = "-" * 12
-
-    while True:
-        elapsed = format_time(int(time.time() - start_time))
+    child_lines: Queue[Tuple[str, TextIO]] = Queue()
+    with (
+        subprocess.Popen(
+            args.command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            bufsize=1,
+            universal_newlines=True,
+        ) as proc,
+        consumer(proc.stdout, child_lines, sys.stdout),
+        consumer(proc.stderr, child_lines, sys.stdout),
+    ):
+        start_time = time.time()
+        output_lines: list[Tuple[str, TextIO]] = []
 
         while True:
-            try:
-                output_lines.append(q.get_nowait())
-            except Empty:
+            elapsed = format_time(int(time.time() - start_time))
+
+            while True:
+                try:
+                    output_lines.append(child_lines.get_nowait())
+                except Empty:
+                    break
+
+            print(f"\033[H\033[JElapsed time: {elapsed}")
+            print(HR)
+            for line, source in output_lines[-args.num_lines :]:
+                print(line, end="", file=source)
+            output_lines = output_lines[-args.num_lines :]
+
+            if proc.poll() is not None and child_lines.empty():
                 break
 
-        print(f"\033[H\033[JElapsed Time: {elapsed}")
-        print(hr)
-        for line, source in output_lines[-args.num_lines :]:
-            print(line, end="", file=source)
-        output_lines = output_lines[-args.num_lines :]
+            time.sleep(0.01)
 
-        if proc.poll() is not None and q.empty():
-            break
-
-        time.sleep(0.01)
-
-    elapsed = format_time(int(time.time() - start_time))
-    print(hr)
-    print(f"Elapsed Time: {elapsed}")
-    return proc.returncode
+        elapsed = format_time(int(time.time() - start_time))
+        print(HR)
+        print(f"Finished in: {elapsed}")
+        return proc.returncode
 
 
-def enqueue_output(out: IO[str], queue: Queue[Tuple[str, TextIO]], source: TextIO):
-    for line in iter(out.readline, ""):
+@contextmanager
+def consumer(reader: IO[str] | None, queue: Queue[Tuple[str, TextIO]], source: TextIO):
+    if reader is None:
+        raise Exception("no IO to read")
+    child = Thread(target=enqueue_output, args=(reader, queue, source))
+    child.start()
+    try:
+        yield None
+    finally:
+        child.join()
+
+
+def enqueue_output(reader: IO[str], queue: Queue[Tuple[str, TextIO]], source: TextIO):
+    for line in iter(reader.readline, ""):
         queue.put((line, source))
-    out.close()
+    reader.close()
 
 
 def format_time(seconds: int):
