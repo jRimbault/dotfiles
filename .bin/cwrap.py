@@ -52,7 +52,8 @@ def main(args: Opt):
                 except Empty:
                     break
 
-            print(f"\033[H\033[JElapsed time {elapsed}")
+            clear()
+            print(f"Elapsed time {elapsed}")
             print(HR)
             for line, source in output_lines[-args.num_lines :]:
                 print(line, end="", file=source)
@@ -89,6 +90,10 @@ def enqueue_output(reader: IO[str], queue: Queue[Tuple[str, TextIO]], source: Te
     for line in iter(reader.readline, ""):
         queue.put((line, source))
     reader.close()
+
+
+def clear():
+    print("\033[H\033[J", end="")
 
 
 def parse_args(argv: list[str]):
