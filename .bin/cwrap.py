@@ -40,21 +40,18 @@ def main(args: Opt):
 
     while True:
         elapsed = format_elapsed_time(int(time.time() - start_time))
-        updated = False
 
         while True:
             try:
                 line, source = q.get_nowait()
                 output_lines.append((line, source))
-                updated = True
             except Empty:
                 break
 
-        if updated:
-            print(f"\033[H\033[JElapsed Time: {elapsed}")
-            print("  " + "-" * 10)
-            for line, source in output_lines[-args.num_lines :]:
-                print(line, end="", file=source)
+        print(f"\033[H\033[JElapsed Time: {elapsed}")
+        print("  " + "-" * 10)
+        for line, source in output_lines[-args.num_lines :]:
+            print(line, end="", file=source)
 
         if proc.poll() is not None and q.empty():
             break
@@ -70,6 +67,7 @@ def main(args: Opt):
             else:
                 print(line, end="", file=sys.stderr)
 
+    print(f"Elapsed Time: {elapsed}")
     return proc.returncode
 
 
