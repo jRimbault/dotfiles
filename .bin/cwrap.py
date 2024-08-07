@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
 import argparse
-from dataclasses import dataclass
+import shutil
 import subprocess
 import sys
-import textwrap
 import time
+from dataclasses import dataclass
 from queue import Empty, Queue
 from threading import Thread
+from typing import IO, TextIO, Tuple
 
 
 @dataclass
@@ -26,7 +27,7 @@ def main(args: Opt):
         universal_newlines=True,
     )
 
-    q = Queue()
+    q: Queue[Tuple[str, TextIO]] = Queue()
 
     t_stdout = Thread(target=enqueue_output, args=(proc.stdout, q, sys.stdout))
     t_stderr = Thread(target=enqueue_output, args=(proc.stderr, q, sys.stderr))
@@ -36,48 +37,42 @@ def main(args: Opt):
     t_stderr.start()
 
     start_time = time.time()
-    output_lines = []
+    output_lines: list[Tuple[str, TextIO]] = []
+    hr = "-" * 12
 
     while True:
-        elapsed = format_elapsed_time(int(time.time() - start_time))
+        elapsed = format_time(int(time.time() - start_time))
 
         while True:
             try:
-                line, source = q.get_nowait()
-                output_lines.append((line, source))
+                output_lines.append(q.get_nowait())
             except Empty:
                 break
 
         print(f"\033[H\033[JElapsed Time: {elapsed}")
-        print("  " + "-" * 10)
+        print(hr)
         for line, source in output_lines[-args.num_lines :]:
             print(line, end="", file=source)
+        output_lines = output_lines[-args.num_lines :]
 
         if proc.poll() is not None and q.empty():
             break
 
         time.sleep(0.01)
 
-    # Print any remaining lines after the process finishes
-    if output_lines:
-        print(f"\033[H\033[JElapsed Time: {elapsed}")
-        for line, source in output_lines:
-            if source == 1:
-                print(line, end="")
-            else:
-                print(line, end="", file=sys.stderr)
-
+    elapsed = format_time(int(time.time() - start_time))
+    print(hr)
     print(f"Elapsed Time: {elapsed}")
     return proc.returncode
 
 
-def enqueue_output(out, queue, source):
+def enqueue_output(out: IO[str], queue: Queue[Tuple[str, TextIO]], source: TextIO):
     for line in iter(out.readline, ""):
         queue.put((line, source))
     out.close()
 
 
-def format_elapsed_time(seconds: int):
+def format_time(seconds: int):
     h, rem = divmod(seconds, 3600)
     m, s = divmod(rem, 60)
     if h > 0:
@@ -88,19 +83,20 @@ def format_elapsed_time(seconds: int):
         return f"{int(s)}s"
 
 
-def parse_args(argv):
+def parse_args(argv: list[str]):
     parser = argparse.ArgumentParser(
         description="""
         Run a command and display its output in a scrolling window.
         Doesn't particularly work well with outputs with lots of control characters.
         """
     )
+    term = shutil.get_terminal_size((80, 20))
     parser.add_argument("command", help="The command to run")
     parser.add_argument(
         "-n",
         "--num-lines",
         type=int,
-        default=10,
+        default=max(term.lines - 40, 10),  # leave space for wrapping long lines
         help="Number of lines to display at a time",
     )
     args = parser.parse_args(argv)
