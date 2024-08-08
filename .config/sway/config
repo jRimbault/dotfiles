@@ -293,6 +293,17 @@ mode '$screenshot_mode' {
 }
 bindsym $mod+s mode '$screenshot_mode'
 
+set $opacity_mode opacity: [+]|[-]
+mode '$opacity_mode' {
+    # 86 KP_Add
+    # 82 KP_Subtract
+    bindsym KP_Add exec swaymsg opacity plus .1
+    bindsym KP_Subtract exec swaymsg opacity minus .1
+    bindsym Return mode default
+    bindsym Escape mode default
+}
+bindsym $mod+o mode '$opacity_mode'
+
 include /etc/sway/config.d/*
 
 # PRETTINESS UwU
