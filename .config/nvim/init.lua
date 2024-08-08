@@ -48,7 +48,7 @@ vim.cmd([[
   set nocompatible
   syntax on
   set termguicolors
-  colorscheme monochrome
+  colorscheme onedark
   set guicursor=
 
   " Toggle display of line numbers
@@ -197,6 +197,7 @@ vim.cmd([[
   set statusline+=\ " padding space
 
   hi statusline ctermbg=0 ctermfg=0
+  hi Normal ctermbg=none guibg=none
 
   let s:hidden_statusline=0
   function! ToggleStatusLine()
@@ -227,7 +228,6 @@ vim.cmd([[
   function! ToggleAll()
     call ToggleLineNumbers()
     call ToggleStatusLine()
-    call ToggleWhiteSpace()
     call HighlightCurrentLine()
   endfunction
   nnoremap ,ta :call ToggleAll() <cr>
