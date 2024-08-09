@@ -175,11 +175,12 @@ vim.api.nvim_create_user_command("CommitCoAuthoredBy", commit_coauthored_by, {})
 vim.opt.statusline = "%f%m%=%l:%c - %03p%% %y %{&fileencoding?&fileencoding:&encoding} [%{&fileformat}]"
 vim.cmd("hi statusline ctermbg=0 ctermfg=0")
 
-local hidden_statusline = false
+local statusline_visible = false
 local function toggle_statusline()
-    hidden_statusline = not hidden_statusline
-    vim.opt.laststatus = hidden_statusline and 2 or 0
+    statusline_visible = not statusline_visible
+    vim.opt.laststatus = statusline_visible and 2 or 0
 end
+vim.opt.laststatus = statusline_visible and 2 or 0
 vim.keymap.set('n', ',ts', toggle_statusline, {
     noremap = true
 })
