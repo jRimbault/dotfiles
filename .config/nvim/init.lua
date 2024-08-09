@@ -1,284 +1,247 @@
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
-  vim.fn.system({
-    "git",
-    "clone",
-    "--filter=blob:none",
-    "https://github.com/folke/lazy.nvim.git",
-    "--branch=stable", -- latest stable release
-    lazypath,
-  })
+    vim.fn.system(
+        {"git", "clone", "--filter=blob:none", "https://github.com/folke/lazy.nvim.git", "--branch=stable", -- latest stable release
+         lazypath})
 end
 vim.opt.rtp:prepend(lazypath)
 
 local lazy = require("lazy")
-lazy.setup({
-    "itspriddle/vim-shellcheck",
-    "navarasu/onedark.nvim",
-    "fxn/vim-monochrome",
-    {
-        'numToStr/Comment.nvim',
-        lazy = false,
-    },
-    {
-        "nvim-tree/nvim-tree.lua",
-        lazy = false,
-    },
-    {
-        "nvim-treesitter/nvim-treesitter",
-        build = ":TSUpdate",
-        config = function ()
-            local configs = require("nvim-treesitter.configs")
+lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monochrome", {
+    'numToStr/Comment.nvim',
+    lazy = false
+}, {
+    "nvim-tree/nvim-tree.lua",
+    lazy = false
+}, {
+    "nvim-treesitter/nvim-treesitter",
+    build = ":TSUpdate",
+    config = function()
+        local configs = require("nvim-treesitter.configs")
 
-            configs.setup({
-                ensure_installed = { "c", "lua", "vim", "vimdoc", "query", "elixir", "heex", "javascript", "html" },
-                sync_install = false,
-                highlight = { enable = true },
-                indent = { enable = true },
-            })
-        end,
-    },
-}, opts)
-
-vim.cmd([[
-  " remove all autocmds in the global space
-  autocmd!
-
-  " Basic stuff
-  set nocompatible
-  syntax on
-  set termguicolors
-  colorscheme onedark
-  set guicursor=
-
-  " Toggle display of line numbers
-  function! ToggleLineNumbers()
-    set number!
-    set relativenumber!
-  endfunction
-  nnoremap ,l :call ToggleLineNumbers() <cr>
-
-  " Toggle display of whitespace
-  let &showbreak='↪ '
-  set listchars=space:·,tab:»\ ,extends:›,precedes:‹,eol:↲
-  function! ToggleWhiteSpace()
-    set list!
-  endfunction
-  nnoremap ,ws :call ToggleWhiteSpace() <cr>
-
-  " Set colorscheme for git commit editing :
-  " autocmd BufRead COMMIT_EDITMSG colorscheme white
-
-  " Smart search
-  set ignorecase smartcase
-  set showmatch
-  set hlsearch
-
-  " keep cursor in the middle
-  set scrolloff=8
-
-  " Swap files and no backups (don't)
-  set nobackup
-  set nowritebackup
-  set backupdir=/tmp
-  set directory=/tmp
-
-  " Limit to 80 columns
-  set winwidth=79
-  " set textwidth=79
-  " Spaces are the way
-  set shiftwidth=4
-  set tabstop=4
-  set expandtab
-  set softtabstop=4
-  set shiftround
-  " Default indentation
-  set autoindent
-  set smartindent
-  set nocindent
-
-  " allow backspacing over everything in insert mode
-  set backspace=indent,eol,start
-
-  " highlight current line
-  set cmdheight=1
-  set switchbuf=useopen
-  function! HighlightCurrentLine()
-    set cursorline!
-  endfunction
-  nnoremap ,hl :call HighlightCurrentLine() <cr>
-
-  " use emacs-style tab completion when selecting files, etc
-  set wildmode=longest,list
-  " make tab completion for files/buffers act like bash
-  set wildmenu
-
-  " load indent files, to automatically do language-dependent indenting.
-  filetype plugin indent on
-
-  " If a file is changed outside of vim, automatically reload it without asking
-  set autoread
-
-  " Trim trailing whitespace
-  autocmd BufWritePre * %s/\s\+$//e
-  augroup vimrcEx
-    " Clear all autocmds in the group
-    autocmd!
-
-    " for javascript, autoindent with two spaces, always expand tabs
-    autocmd FileType javascript,ruby,haml,eruby,yaml,html,sass,cucumber, set ai sw=2 sts=2 et
-    " for python, autoindent with four spaces, always expand tabs
-    autocmd FileType python,c,cpp,h,php set ai sw=4 sts=4 et
-    autocmd FileType python colorscheme onedark
-
-    autocmd! BufRead,BufNewFile *.sass setfiletype sass
-
-    " Don't syntax highlight markdown because it's often wrong
-    autocmd! FileType mkd setlocal syn=off
-    autocmd BufRead *.mkd  set ai formatoptions=tcroqn2 comments=n:&gt;
-    autocmd BufRead *.markdown  set ai formatoptions=tcroqn2 comments=n:&gt;
-    " *.md is markdown
-    autocmd! BufNewFile,BufRead *.md setlocal ft=
-
-    " Leave the return key alone when in command line windows, since it's used
-    " to run commands there.
-    autocmd! CmdwinEnter * :unmap <cr>
-    autocmd! CmdwinLeave * :call MapCR()
-  augroup END
-
-  " RemoveFancyCharacters COMMAND
-  " Remove smart quotes, etc.
-  function! RemoveFancyCharacters()
-    let typo = {
-      \ "“": '"',
-      \ "”": '"',
-      \ "‘": "'",
-      \ "’": "'",
-      \ "–": '--',
-      \ "—": '---',
-      \ "…": '...',
-      \}
-    :exe ":%s/".join(keys(typo), '\|').'/\=typo[submatch(0)]/ge'
-  endfunction
-  command! RemoveFancyCharacters :call RemoveFancyCharacters()
-
-  " When pair programming
-  " Insert a remark about that in the commit message
-  " The list will only be composed of previous committer to the current repo
-  function! CommitCoAuthoredBy()
-    read! echo "Co-authored-by: $(git authors | fzf)"
-  endfunction
-  command! CommitCoAuthoredBy :call CommitCoAuthoredBy()
-
-  " MULTIPURPOSE TAB KEY
-  " Indent if we're at the beginning of a line. Else, do completion (current buffer).
-  function! InsertTabWrapper()
-    let col = col('.') - 1
-    if !col || getline('.')[col - 1] !~ '\k'
-        return "\<tab>"
-    else
-        return "\<c-p>"
-    endif
-  endfunction
-  inoremap <expr> <tab> InsertTabWrapper()
-  inoremap <s-tab> <c-n>
-
-  " Status Line Stuff (CAPITAL S STUFF)
-  set statusline=%f
-  set statusline+=%m
-  " separator
-  set statusline+=%=
-  set statusline+=\ %l:%c
-  set statusline+=\ -
-  set statusline+=\ %03p%%
-  set statusline+=\ %y
-  set statusline+=\ %{&fileencoding?&fileencoding:&encoding}
-  set statusline+=\ [%{&fileformat}\]
-  set statusline+=\ " padding space
-
-  hi statusline ctermbg=0 ctermfg=0
-  hi Normal ctermbg=none guibg=none
-
-  let s:hidden_statusline=0
-  function! ToggleStatusLine()
-    if s:hidden_statusline == 0
-        let s:hidden_statusline=1
-        set laststatus=2
-    else
-        let s:hidden_statusline=0
-        set laststatus=0
-    endif
-  endfunction
-  nnoremap ,ts :call ToggleStatusLine() <cr>
-
-  set laststatus=0
-
-  let s:ruler=0
-  function! ToggleRuler()
-    if s:ruler == 0
-        set colorcolumn=80
-        let s:ruler=1
-    else
-        set colorcolumn=0
-        let s:ruler=0
-    endif
-  endfunction
-  nnoremap ,tr :call ToggleRuler() <cr>
-
-  function! ToggleAll()
-    call ToggleLineNumbers()
-    call ToggleStatusLine()
-    call HighlightCurrentLine()
-  endfunction
-  nnoremap ,ta :call ToggleAll() <cr>
-
-  "" insert closing character when typing the opening character
-  " inoremap { {}<esc>i
-  " inoremap ( ()<esc>i
-  " inoremap [ []<esc>i
-  " inoremap " ""<esc>i
-  " inoremap ' ''<esc>i
-
-  " run current file
-  function! RunFile(filename)
-    if expand("%") != ""
-        :w
+        configs.setup({
+            ensure_installed = {"c", "lua", "vim", "vimdoc", "query", "elixir", "heex", "javascript", "html"},
+            sync_install = false,
+            highlight = {
+                enable = true
+            },
+            indent = {
+                enable = true
+            }
+        })
     end
-    if executable(a:filename)
-        exec ":!" . a:filename
+}}, opts)
+
+-- Basic settings
+vim.opt.compatible = false
+vim.opt.syntax = "on"
+vim.opt.termguicolors = true
+vim.cmd("colorscheme onedark")
+vim.cmd("hi Normal guibg=none")
+vim.opt.guicursor = ""
+
+-- Toggle line numbers
+vim.keymap.set('n', ',l', ':set number! relativenumber!<CR>', {
+    noremap = true
+})
+
+-- Toggle display of whitespace
+vim.opt.listchars = {
+    space = '·',
+    tab = '» ',
+    extends = '›',
+    precedes = '‹',
+    eol = '↲'
+}
+vim.opt.showbreak = '↪ '
+vim.keymap.set('n', ',ws', ':set list!<CR>', {
+    noremap = true
+})
+
+-- Smart search
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
+vim.opt.showmatch = true
+vim.opt.hlsearch = true
+
+-- Keep cursor in the middle
+vim.opt.scrolloff = 8
+
+-- Disable swap files and backups
+vim.opt.backup = false
+vim.opt.writebackup = false
+vim.opt.backupdir = "/tmp"
+vim.opt.directory = "/tmp"
+
+-- Limit to 80 columns
+vim.opt.winwidth = 79
+vim.opt.shiftwidth = 4
+vim.opt.tabstop = 4
+vim.opt.expandtab = true
+vim.opt.softtabstop = 4
+vim.opt.shiftround = true
+vim.opt.autoindent = true
+vim.opt.smartindent = true
+vim.opt.cindent = false
+
+-- Allow backspacing over everything in insert mode
+vim.opt.backspace = {'indent', 'eol', 'start'}
+
+-- Highlight current line
+vim.opt.cmdheight = 1
+vim.opt.switchbuf = "useopen"
+vim.keymap.set('n', ',hl', ':set cursorline!<CR>', {
+    noremap = true
+})
+
+-- Emacs-style tab completion when selecting files
+vim.opt.wildmode = {'longest', 'list'}
+vim.opt.wildmenu = true
+
+-- Load indent files for language-dependent indenting
+vim.cmd("filetype plugin indent on")
+
+-- Automatically reload files changed outside of vim
+vim.opt.autoread = true
+
+-- Trim trailing whitespace on save
+vim.api.nvim_create_autocmd("BufWritePre", {
+    pattern = "*",
+    command = [[%s/\s\+$//e]]
+})
+
+-- Autocommands for specific file types and cases
+vim.api.nvim_create_augroup("vimrcEx", {
+    clear = true
+})
+vim.api.nvim_create_autocmd("FileType", {
+    group = "vimrcEx",
+    pattern = {"javascript", "ruby", "haml", "eruby", "yaml", "html", "sass", "cucumber"},
+    command = "set ai sw=2 sts=2 et"
+})
+vim.api.nvim_create_autocmd("FileType", {
+    group = "vimrcEx",
+    pattern = {"python", "c", "cpp", "h", "php"},
+    command = "set ai sw=4 sts=4 et"
+})
+vim.api.nvim_create_autocmd("FileType", {
+    group = "vimrcEx",
+    pattern = "python",
+    command = "colorscheme onedark"
+})
+vim.api.nvim_create_autocmd("FileType", {
+    group = "vimrcEx",
+    pattern = "mkd",
+    command = "setlocal syn=off"
+})
+vim.api.nvim_create_autocmd("FileType", {
+    group = "vimrcEx",
+    pattern = "*.md",
+    command = "setlocal ft="
+})
+vim.api.nvim_create_autocmd("CmdwinEnter", {
+    group = "vimrcEx",
+    command = "unmap <CR>"
+})
+vim.api.nvim_create_autocmd("CmdwinLeave", {
+    group = "vimrcEx",
+    command = "call MapCR()"
+})
+
+-- Remove fancy characters command
+local function remove_fancy_characters()
+    local typo = {
+        ["“"] = '"',
+        ["”"] = '"',
+        ["‘"] = "'",
+        ["’"] = "'",
+        ["–"] = '--',
+        ["—"] = '---',
+        ["…"] = '...'
+    }
+    for k, v in pairs(typo) do
+        vim.cmd(string.format("%%s/%s/%s/g", k, v))
     end
-  endfunction
-  nnoremap <space><space> :call RunFile(expand("%"))<cr>
+end
+vim.api.nvim_create_user_command("RemoveFancyCharacters", remove_fancy_characters, {})
 
-  " source local config
-  let loaded_matchparen = 1
-  runtime lvimrc
-]])
+-- Pair programming: Insert a Co-authored-by line in commit message
+local function commit_coauthored_by()
+    vim.cmd([[read !echo "Co-authored-by: $(git authors | fzf)"]])
+end
+vim.api.nvim_create_user_command("CommitCoAuthoredBy", commit_coauthored_by, {})
 
+-- Status line configuration
+vim.opt.statusline = "%f%m%=%l:%c - %03p%% %y %{&fileencoding?&fileencoding:&encoding} [%{&fileformat}]"
+vim.cmd("hi statusline ctermbg=0 ctermfg=0")
+
+local hidden_statusline = false
+local function toggle_statusline()
+    hidden_statusline = not hidden_statusline
+    vim.opt.laststatus = hidden_statusline and 2 or 0
+end
+vim.keymap.set('n', ',ts', toggle_statusline, {
+    noremap = true
+})
+
+local ruler_visible = false
+local function toggle_ruler()
+    ruler_visible = not ruler_visible
+    vim.opt.colorcolumn = ruler_visible and "80" or "0"
+end
+vim.keymap.set('n', ',tr', toggle_ruler, {
+    noremap = true
+})
+
+local function toggle_all()
+    vim.cmd("set number! relativenumber!")
+    toggle_statusline()
+    vim.cmd("set cursorline!")
+end
+vim.keymap.set('n', ',ta', toggle_all, {
+    noremap = true
+})
+
+-- Run current file
+local function run_file()
+    if vim.fn.expand("%") ~= "" then
+        vim.cmd("w")
+    end
+    if vim.fn.executable(vim.fn.expand("%")) == 1 then
+        vim.cmd("!" .. vim.fn.expand("%"))
+    end
+end
+vim.keymap.set('n', '<space><space>', run_file, {
+    noremap = true
+})
+
+-- Source local config
+vim.g.loaded_matchparen = 1
+vim.cmd("runtime! lvimrc")
+
+-- Plugin setups
 require('Comment').setup()
 require("nvim-tree").setup({
-  sort = {
-    sorter = "case_sensitive",
-  },
-  view = {
-    width = 30,
-  },
-  renderer = {
-    group_empty = true,
-    icons = {
-        show = {
-            file = false,
-            folder = false,
-            folder_arrow = false,
-            git = false,
-            modified = false,
-            diagnostics = false,
-            bookmarks = false,
-        },
+    sort_by = "case_sensitive",
+    view = {
+        width = 30
     },
-  },
-  filters = {
-    dotfiles = false,
-  },
+    renderer = {
+        group_empty = true,
+        icons = {
+            show = {
+                file = false,
+                folder = false,
+                folder_arrow = false,
+                git = false,
+                modified = false,
+                diagnostics = false,
+                bookmarks = false
+            }
+        }
+    },
+    filters = {
+        dotfiles = false
+    }
 })
 
