@@ -116,23 +116,13 @@ vim.api.nvim_create_augroup("vimrcEx", {
 })
 vim.api.nvim_create_autocmd("FileType", {
     group = "vimrcEx",
-    pattern = {"javascript", "ruby", "haml", "eruby", "yaml", "html", "sass", "cucumber"},
+    pattern = {"cucumber", "eruby", "haml", "html", "javascript", "ruby", "sass", "yaml"},
     command = "set ai sw=2 sts=2 et"
 })
 vim.api.nvim_create_autocmd("FileType", {
     group = "vimrcEx",
-    pattern = {"python", "c", "cpp", "h", "php"},
+    pattern = {"c", "cpp", "h", "php", "python", "rust"},
     command = "set ai sw=4 sts=4 et"
-})
-vim.api.nvim_create_autocmd("FileType", {
-    group = "vimrcEx",
-    pattern = "python",
-    command = "colorscheme onedark"
-})
-vim.api.nvim_create_autocmd("FileType", {
-    group = "vimrcEx",
-    pattern = "mkd",
-    command = "setlocal syn=off"
 })
 vim.api.nvim_create_autocmd("FileType", {
     group = "vimrcEx",
