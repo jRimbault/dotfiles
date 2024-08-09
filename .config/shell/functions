@@ -248,3 +248,13 @@ random_data_file()
     size="${2:-1}"
     dd if=/dev/urandom bs=1M count=$size | pv > "$dest"
 }
+
+show_lines()
+{
+    local start end
+    file="$1"
+    start="${2:-1}"
+    end="${3:-10}"
+    end2=$((end + 1))
+    sed -n "$start,${end}p;${end2}q" "$file"
+}
