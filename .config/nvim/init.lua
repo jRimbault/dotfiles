@@ -7,30 +7,18 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 local lazy = require("lazy")
-lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monochrome", {
-    'numToStr/Comment.nvim',
-    lazy = false
-}, {
-    "nvim-tree/nvim-tree.lua",
-    lazy = false
-}, {
-    "nvim-treesitter/nvim-treesitter",
-    build = ":TSUpdate",
-    config = function()
-        local configs = require("nvim-treesitter.configs")
-
-        configs.setup({
-            ensure_installed = {"c", "lua", "vim", "vimdoc", "query", "elixir", "heex", "javascript", "html"},
-            sync_install = false,
-            highlight = {
-                enable = true
-            },
-            indent = {
-                enable = true
-            }
-        })
-    end
-}}, opts)
+lazy.setup({
+    "itspriddle/vim-shellcheck",
+    "navarasu/onedark.nvim",
+    "fxn/vim-monochrome",
+    { 'numToStr/Comment.nvim', lazy = false },
+    { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
+    {
+        'nvim-telescope/telescope.nvim',
+        tag = '0.1.8',
+        dependencies = { 'nvim-lua/plenary.nvim' },
+    },
+}, opts)
 
 -- Basic settings
 vim.opt.compatible = false
@@ -212,27 +200,10 @@ vim.cmd("runtime! lvimrc")
 
 -- Plugin setups
 require('Comment').setup()
-require("nvim-tree").setup({
-    sort_by = "case_sensitive",
-    view = {
-        width = 30
-    },
-    renderer = {
-        group_empty = true,
-        icons = {
-            show = {
-                file = false,
-                folder = false,
-                folder_arrow = false,
-                git = false,
-                modified = false,
-                diagnostics = false,
-                bookmarks = false
-            }
-        }
-    },
-    filters = {
-        dotfiles = false
-    }
-})
+
+local builtin = require('telescope.builtin')
+vim.keymap.set('n', ',ff', builtin.find_files, {})
+vim.keymap.set('n', ',fg', builtin.live_grep, {})
+vim.keymap.set('n', ',fb', builtin.buffers, {})
+vim.keymap.set('n', ',fh', builtin.help_tags, {})
 
