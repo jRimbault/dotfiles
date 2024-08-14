@@ -258,3 +258,8 @@ show_lines()
     end2=$((end + 1))
     sed -n "$start,${end}p;${end2}q" "$file"
 }
+
+who-installed()
+{
+    dpkg -S "$(command -v "$1")"
+}
