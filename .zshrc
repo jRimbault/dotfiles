@@ -11,6 +11,7 @@ source "$ZSH/oh-my-zsh.sh"
 declare -ra libs=(
   "aliases"
   "functions"
+  "fzf-git.sh"
   "gh.function"
   "keybindings.zsh"
   "env_vars"
@@ -31,3 +32,4 @@ zstyle ':completion:*:*:git:*' user-commands ${${(M)${(k)commands}:#git-*}/git-/
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
 eval "$(zoxide init zsh)"
+source <(fzf --zsh)
