@@ -2,9 +2,16 @@
     path = ~/.gitconfig_local
 
 [core]
+    editor = hx
     excludesfile = ~/.config/git/ignore
     fileMode = true
-    editor = hx
+    pager = delta
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true
 
 [alias]
     # list all defined aliases
@@ -32,10 +39,17 @@
     w = commit -v --allow-empty
     wa = commit -v --amend --allow-empty
 
+[merge]
+    conflictstyle = diff3
+
+[diff]
+    colorMoved = default
+
 [push]
     followTags = true
 
 [init]
     defaultBranch = main
+
 [maintenance]
 	repo = /home/jrimbault/Documents/gitlab.lan.provenrun.com/jrimbault/board-booker
