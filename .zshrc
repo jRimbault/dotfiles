@@ -1,13 +1,13 @@
 #!/usr/bin/env zsh
 umask 022
-export ZSH="$HOME/.oh-my-zsh"
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt appendhistory
 
 ZSH_CUSTOM="$HOME/.config/shell"
 ZSH_THEME="symbols"
 
-plugins=()
-
-source "$ZSH/oh-my-zsh.sh"
 declare -ra libs=(
   "aliases"
   "functions"
@@ -15,6 +15,7 @@ declare -ra libs=(
   "gh.function"
   "keybindings.zsh"
   "env_vars"
+  "themes/$ZSH_THEME.zsh-theme"
 )
 
 # Load aliases and functions

@@ -40,3 +40,4 @@ export EDITOR
 # Added by Toolbox App
 export PATH="$PATH:/home/jrimbault/.local/share/JetBrains/Toolbox/scripts"
 
+. "$HOME/.cargo/env"
