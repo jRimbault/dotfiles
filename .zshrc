@@ -8,6 +8,10 @@ setopt appendhistory
 ZSH_CUSTOM="$HOME/.config/shell"
 ZSH_THEME="symbols"
 
+fpath+="$ZSH_CUSTOM/completions"
+autoload -U compinit
+compinit
+
 declare -ra libs=(
   "aliases"
   "functions"
