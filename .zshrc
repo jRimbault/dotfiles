@@ -1,9 +1,16 @@
 #!/usr/bin/env zsh
 umask 022
-HISTFILE=~/.zsh_history
-HISTSIZE=10000
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
 SAVEHIST=10000
+setopt histignorespace
 setopt appendhistory
+setopt extended_history
+setopt hist_expire_dups_first
+setopt hist_ignore_dups
+setopt hist_ignore_space
+setopt hist_verify
+setopt share_history
 
 ZSH_CUSTOM="$HOME/.config/shell"
 ZSH_THEME="symbols"
