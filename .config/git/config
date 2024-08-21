@@ -2,7 +2,7 @@
     path = ~/.gitconfig_local
 
 [core]
-    editor = hx
+    editor = nvim
     excludesfile = ~/.config/git/ignore
     fileMode = true
     pager = delta
