@@ -27,6 +27,7 @@ prepend:path "$HOME/.local/bin"
 prepend:path "$HOME/.bin"
 prepend:path "$HOME/bin"
 prepend:path "$GOBIN"
+prepend:path "$HOME/.local/share/JetBrains/Toolbox/scripts"
 
 
 EDITOR="$(command -v nvim)"
@@ -34,9 +35,3 @@ EDITOR="$(command -v nvim)"
 export N_PREFIX
 export PATH
 export EDITOR
-
-
-
-# Added by Toolbox App
-export PATH="$PATH:/home/jrimbault/.local/share/JetBrains/Toolbox/scripts"
-
