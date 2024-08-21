@@ -1,11 +1,17 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.10.2"
+# dependencies = [ "requests>=2.32.3" ]
+# ///
 import argparse
-import json
 import random
 import sys
-import urllib.request
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
+from queue import Queue
+
+import requests
 
 
 @dataclass(frozen=True)
@@ -13,37 +19,11 @@ class Opt:
     limit: int
 
 
-def main(args: Opt):
-    score = 0
-    for _ in range(args.limit):
-        post = Post.random()
-        print(f"{post.title}")
-        is_onion = input_is_from_onion()
-        match (is_onion, post.is_from_the_onion):
-            case (True, True) | (False, False):
-                score += 1
-    print(f"Score: {score}/{args.limit}")
-
-
-def input_is_from_onion() -> bool:
-    while (
-        answer := input(
-            "Is this from The Onion? [y/n] ",
-        )
-        .strip()
-        .lower()
-    ):
-        if answer not in "yesno":
-            continue
-        return answer in "yes"
-    return False
-
-
 @dataclass(frozen=True)
 class Post:
     title: str
     subreddit: str
-    is_from_the_onion: bool
+    is_onion: bool
 
     @staticmethod
     def from_dict(data):
@@ -51,19 +31,86 @@ class Post:
         return Post(
             subreddit=subreddit,
             title=data["title"],
-            is_from_the_onion=subreddit == "TheOnion",
+            is_onion=subreddit == "TheOnion",
         )
 
     @staticmethod
     def random():
         subreddit = random.choice(["nottheonion", "TheOnion"])
         url = f"https://www.reddit.com/r/{subreddit}/random.json"
-        headers = {"User-Agent": "script by u/erelde"}
-        request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request) as response:
-            data = json.load(response)
+        data = requests.get(url).json()
         posts = data[0]["data"]["children"]
         return Post.from_dict(posts[0]["data"])
+
+
+def main(args: Opt):
+    score = 0
+    with fetch_posts(args.limit) as posts:
+        while post := posts.get():
+            score += game_round(post)
+
+    print(f"Score: {score}/{args.limit}")
+
+
+def game_round(post: Post) -> int:
+    print(post.title)
+    match (ask_is_onion(), post.is_onion):
+        case (True, True) | (False, False):
+            print("Right")
+            return 1
+        case _:
+            print("Wrong")
+            return 0
+
+
+def ask_is_onion() -> bool:
+    prompt = "Is this from The Onion? [y/n] "
+    while True:
+        answer = input(prompt).lower()
+        if answer == "":
+            continue
+        if answer not in "yesno":
+            continue
+        return answer in "yes"
+
+
+def try_get_post():
+    # Post.random() can fail because I don't quite know
+    # the response's type, so sometimes the indexing will fail
+    # no problem try again, it's only a small game
+    while True:
+        try:
+            return Post.random()
+        except:
+            pass
+
+
+@contextmanager
+def fetch_posts(limit: int):
+    def internal(q: Posts, limit: int):
+        for _ in range(limit):
+            q.queue.put(try_get_post())
+
+    posts = Posts(Queue(), limit)
+    thread = threading.Thread(target=internal, args=(posts, limit))
+    thread.start()
+    try:
+        yield posts
+    finally:
+        thread.join()
+
+
+@dataclass
+class Posts:
+    queue: Queue[Post]
+    limit: int
+    current: int = 0
+
+    def get(self):
+        if self.current == self.limit:
+            return None
+        self.current += 1
+        return self.queue.get()
 
 
 def parse_args(argv):
@@ -72,9 +119,7 @@ def parse_args(argv):
     )
     parser.add_argument("-l", "--limit", type=int, default=5)
     args = parser.parse_args(argv)
-    return Opt(
-        limit=args.limit,
-    )
+    return Opt(limit=args.limit)
 
 
 if __name__ == "__main__":
