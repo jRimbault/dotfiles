@@ -29,6 +29,7 @@ bindkey -M vicmd v edit-command-line
 zstyle ':completion:*' list-colors
 zstyle ':completion:*:*:git:*' user-commands ${${(M)${(k)commands}:#git-*}/git-/}
 
+test -f ~/.cargo/env && . ~/.cargo/env
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
 eval "$(zoxide init zsh)"
