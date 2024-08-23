@@ -26,6 +26,7 @@
     current = rev-parse HEAD
 
     r = log
+    co = checkout
     read = log
     a = add
     au = add --update

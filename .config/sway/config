@@ -42,14 +42,8 @@ set $desk_display DP-1
 
 output * background $bg fill
 
-output $laptop_display {
-    mode 1920x1080@59.999Hz
-    position 320 1440
-}
-output $desk_display {
-    mode 2560x1440@60Hz
-    position 0 0
-}
+output $laptop_display { mode 1920x1080@59.999Hz; position 320 1440 }
+output $desk_display { mode 2560x1440@60Hz; position 0 0 }
 
 ### Idle configuration
 set $lock xkcd_lock
