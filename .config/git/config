@@ -5,10 +5,10 @@
     editor = nvim
     excludesfile = ~/.config/git/ignore
     fileMode = true
-    pager = delta
+    pager = delta --diff-so-fancy
 
 [interactive]
-    diffFilter = delta --color-only
+    diffFilter = delta --color-only --diff-so-fancy
 
 [delta]
     navigate = true
