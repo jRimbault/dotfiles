@@ -36,6 +36,11 @@ set $0 agrave
 
 set $bg /home/jrimbault/.config/sway/wallpaper
 
+### Notifications
+# exec dbus-daemon --session --address=unix:path=$XDG_RUNTIME_DIR/bus
+exec mako
+exec poweralertd
+
 ### Output configuration
 set $laptop_display eDP-1
 set $desk_display DP-1
