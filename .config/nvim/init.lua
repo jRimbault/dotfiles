@@ -266,6 +266,7 @@ vim.opt.syntax = "on"
 vim.opt.termguicolors = true
 vim.cmd("colorscheme onedark")
 vim.cmd("hi Normal guibg=none")
+vim.opt.background = "dark"
 vim.opt.guicursor = ""
 
 -- Toggle line numbers
