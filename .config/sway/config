@@ -309,6 +309,7 @@ include /etc/sway/config.d/*
 default_border pixel 0
 default_floating_border pixel 0
 for_window [floating] border pixel 5
+for_window [app_id = "gnome-calculator"] floating enable
 
 gaps outer 0
 gaps inner 5
