@@ -96,6 +96,18 @@ lazy.setup({
 					},
 				},
 			}
+            -- Python LSP
+            lspconfig.pyright.setup{
+                settings = {
+                    ["pyright"] = {
+						completion = {
+							postfix = {
+								enable = false,
+							},
+						},
+                    }
+                }
+            }
 
 			-- Bash LSP
 			local configs = require 'lspconfig.configs'

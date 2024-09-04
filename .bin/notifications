@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+import json
+import subprocess
+import textwrap
+from dataclasses import dataclass
+from subprocess import PIPE
+
+
+def main():
+    notifications = read_notifications()
+    for n in notifications:
+        title = f"{n.summary} [{n.app_name}]\n"
+        body = "\n".join("\n".join(textwrap.wrap(line)) for line in n.body.splitlines())
+        body = textwrap.indent(body, "  ")
+        print(title + body)
+
+
+@dataclass(frozen=True)
+class Notification:
+    app_name: str
+    summary: str
+    body: str
+
+    @staticmethod
+    def from_dict(data):
+        keys = ["app-name", "summary", "body"]
+        values = [data[key]["data"].strip() for key in keys]
+        return Notification(*values)
+
+
+def read_notifications():
+    with subprocess.Popen(["makoctl", "history"], stdout=PIPE) as child:
+        data = json.load(child.stdout)
+        return [Notification.from_dict(d) for d in data["data"][0]]
+
+
+if __name__ == "__main__":
+    main()
