@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+get_volume()
+{
+    pactl get-sink-volume @DEFAULT_SINK@ \
+        | rg -o '(\d+%)' \
+        | head -n 1
+}
+
+case "$1" in
+    toggle)
+        pactl set-sink-mute @DEFAULT_SINK@ toggle
+        status="$(pactl get-sink-mute @DEFAULT_SINK@)"
+        notify-send -t 500 "Audio" "$status"
+        ;;
+    up)
+        pactl set-sink-volume @DEFAULT_SINK@ +5%
+        notify-send -t 500 "Audio" "$(get_volume)"
+        ;;
+    down)
+        pactl set-sink-volume @DEFAULT_SINK@ -5%
+        status="$(pactl get-sink-volume @DEFAULT_SINK@)"
+        notify-send -t 500 "Audio" "$(get_volume)"
+        ;;
+    *)
+        echo "Usage: $0 {toggle|up|down}"
+        exit 1
+        ;;
+esac
+
