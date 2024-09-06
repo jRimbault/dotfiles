@@ -17,3 +17,4 @@ undo = revert --no-backup
 l = ! $HG log --branch "$($HG branch)" "$@"
 lo = log --template "{label('custom.rev', node|short)} {label('custom.date', date(date, '%Y-%m-%d %H:%M'))} {label('custom.author', author|person)} {desc|strip|firstline}\n"
 last-work = heads --topo --template "{label('custom.date', date(date, '%Y-%m-%d %H:%M'))} {label('custom.rev', branch)} {label('custom.author', author|person)}\n"
+show = diff -c
