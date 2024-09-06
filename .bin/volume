@@ -8,7 +8,7 @@ get_volume() {
         head -n 1
 }
 
-cmd="${1:-x}"
+cmd="${1:-get}"
 case "$cmd" in
 toggle)
     pactl set-sink-mute @DEFAULT_SINK@ toggle
@@ -24,8 +24,13 @@ down)
     status="$(pactl get-sink-volume @DEFAULT_SINK@)"
     notify-send -t 500 "Audio" "$(get_volume)"
     ;;
-*)
-    echo "Usage: $0 {toggle|up|down}"
-    exit 1
+get)
+    notify-send -t 1000 "Audio" "$(get_volume)"
+    ;;
+help|*)
+    echo "Usage: $0 {toggle|up|down|get}"
+    if [[ "$cmd" != help ]]; then
+        exit 1
+    fi
     ;;
 esac
