@@ -25,7 +25,8 @@ down)
     notify-send -t 500 "Audio" "$(get_volume)"
     ;;
 get)
-    notify-send -t 1000 "Audio" "$(get_volume)"
+    status="$(pactl get-sink-mute @DEFAULT_SINK@)"
+    notify-send -t 1000 "Audio" "$(get_volume) $status"
     ;;
 help|*)
     echo "Usage: $0 {toggle|up|down|get}"
