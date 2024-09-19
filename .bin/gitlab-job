@@ -1,40 +1,56 @@
 #!/usr/bin/env python3
 # pyright: strict
 
+import json
 import subprocess
 import sys
+from dataclasses import dataclass
+from typing import Any
 
 
 def main():
-    job = next((a for a in sys.argv[1:] if not a.startswith("-")), None)
-    flags = [a for a in sys.argv[1:] if a.startswith("-")]
-    if not job:
-        job = ask_job()
+    argv = sys.argv[1:]
+    job = next((a for a in argv if not a.startswith("-")), None) or ask_job()
+    flags = [a for a in argv if a.startswith("-")]
     subprocess.run(["gitlab-ci-local"] + flags + [job])
 
 
 def ask_job():
-    jobs = subprocess.run(
-        ["gitlab-ci-local", "--list-json"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
-    jobs = subprocess.run(
-        ["jq", "-r", ".[].name"], input=jobs.stdout, stdout=subprocess.PIPE, check=True
-    )
+    jobs = job_list()
     try:
-        fzf = subprocess.run(
+        job = subprocess.check_output(
             ["fzf"],
-            input=jobs.stdout,
-            stdout=subprocess.PIPE,
-            check=True,
+            input="\n".join(job.name for job in jobs).encode(),
         )
+        return job.decode().strip()
     except subprocess.CalledProcessError as error:
         if error.returncode == 130:
             raise KeyboardInterrupt()
         raise
-    return fzf.stdout.decode("utf-8").strip()
+
+
+def job_list():
+    with subprocess.Popen(
+        ["gitlab-ci-local", "--list-json"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    ) as child:
+        if not child.stdout:
+            raise Unreachable()
+        return map(Job.from_dict, json.load(child.stdout))
+
+
+@dataclass
+class Job:
+    name: str
+
+    @staticmethod
+    def from_dict(value: Any):
+        return Job(name=value["name"])
+
+
+class Unreachable(BaseException):
+    pass
 
 
 if __name__ == "__main__":
@@ -42,4 +58,3 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("Keyboard interrupt")
-        pass
