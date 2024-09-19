@@ -1,4 +1,45 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
+# pyright: strict
 
-job="$(gitlab-ci-local --list-json | jq -r '.[].name' | fzf)"
-gitlab-ci-local "$@" "$job"
+import subprocess
+import sys
+
+
+def main():
+    job = next((a for a in sys.argv[1:] if not a.startswith("-")), None)
+    flags = [a for a in sys.argv[1:] if a.startswith("-")]
+    if not job:
+        job = ask_job()
+    subprocess.run(["gitlab-ci-local"] + flags + [job])
+
+
+def ask_job():
+    jobs = subprocess.run(
+        ["gitlab-ci-local", "--list-json"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
+    jobs = subprocess.run(
+        ["jq", "-r", ".[].name"], input=jobs.stdout, stdout=subprocess.PIPE, check=True
+    )
+    try:
+        fzf = subprocess.run(
+            ["fzf"],
+            input=jobs.stdout,
+            stdout=subprocess.PIPE,
+            check=True,
+        )
+    except subprocess.CalledProcessError as error:
+        if error.returncode == 130:
+            raise KeyboardInterrupt()
+        raise
+    return fzf.stdout.decode("utf-8").strip()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Keyboard interrupt")
+        pass
