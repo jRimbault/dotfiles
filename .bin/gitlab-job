@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
 
-selected_name="$(gitlab-ci-local --list-json | jq -r '.[].name' | fzf)"
-
-gitlab-ci-local "$@" "$selected_name"
-
+job="$(gitlab-ci-local --list-json | jq -r '.[].name' | fzf)"
+gitlab-ci-local "$@" "$job"
