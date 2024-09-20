@@ -10,8 +10,6 @@ Forwards all arguments to gitlab-ci-local.
 import json
 import subprocess
 import sys
-from dataclasses import dataclass
-from typing import Any
 
 
 def main():
@@ -19,17 +17,17 @@ def main():
     if "-h" in argv or "--help" in argv:
         subprocess.run(["gitlab-ci-local", "--help"])
         return
-    job = next((a for a in argv if not a.startswith("-")), None) or ask_job()
+    jobs = available_jobs()
+    job = next((a for a in argv if a in jobs), None) or fzf_ask_job(jobs)
     flags = [a for a in argv if a != job]
     subprocess.run(["gitlab-ci-local"] + flags + [job])
 
 
-def ask_job():
-    jobs = job_list()
+def fzf_ask_job(jobs: set[str]):
     try:
         job = subprocess.check_output(
             ["fzf"],
-            input="\n".join(job.name for job in jobs).encode(),
+            input="\n".join(jobs).encode(),
         )
         return job.decode().strip()
     except subprocess.CalledProcessError as error:
@@ -38,7 +36,7 @@ def ask_job():
         raise
 
 
-def job_list():
+def available_jobs() -> set[str]:
     with subprocess.Popen(
         ["gitlab-ci-local", "--list-json"],
         stdout=subprocess.PIPE,
@@ -46,16 +44,8 @@ def job_list():
     ) as child:
         if not child.stdout:
             raise Unreachable()
-        return map(Job.from_dict, json.load(child.stdout))
-
-
-@dataclass
-class Job:
-    name: str
-
-    @staticmethod
-    def from_dict(value: Any):
-        return Job(name=value["name"])
+        data = json.load(child.stdout)
+        return {j["name"] for j in data}
 
 
 class Unreachable(BaseException):
