@@ -11,7 +11,7 @@ from typing import Any
 def main():
     argv = sys.argv[1:]
     job = next((a for a in argv if not a.startswith("-")), None) or ask_job()
-    flags = [a for a in argv if a.startswith("-")]
+    flags = [a for a in argv if a != job]
     subprocess.run(["gitlab-ci-local"] + flags + [job])
 
 
