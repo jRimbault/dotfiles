@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+
+def get_battery_info
+  battery_path = `upower -e | grep 'BAT'`.strip
+  raise "No battery found." if battery_path.empty?
+  `upower -i #{battery_path}`
+end
+
+def extract_battery_percentage(info)
+  percentage_match = info.match(/percentage:\s+(\d+)%/i)
+  raise "Battery percentage not found." unless percentage_match
+  percentage_match[1].to_i
+end
+
+def send_notification(percentage)
+  puts "Battery Percentage: #{percentage}%"
+  `notify-send 'Battery Status' 'Battery Percentage: #{percentage}%'`
+end
+
+send_notification extract_battery_percentage get_battery_info
