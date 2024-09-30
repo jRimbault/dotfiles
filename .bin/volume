@@ -13,7 +13,7 @@ case "$cmd" in
 toggle)
     pactl set-sink-mute @DEFAULT_SINK@ toggle
     status="$(pactl get-sink-mute @DEFAULT_SINK@)"
-    notify-send -t 500 "Audio" "$status"
+    notify-send -t 500 "Audio" "$status $(get_volume)"
     ;;
 up)
     pactl set-sink-volume @DEFAULT_SINK@ +5%
@@ -26,7 +26,7 @@ down)
     ;;
 get)
     status="$(pactl get-sink-mute @DEFAULT_SINK@)"
-    notify-send -t 1000 "Audio" "$(get_volume) $status"
+    notify-send -t 1000 "Audio" "$status $(get_volume)"
     ;;
 help|*)
     echo "Usage: $0 {toggle|up|down|get}"

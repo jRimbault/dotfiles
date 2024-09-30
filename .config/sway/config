@@ -111,12 +111,13 @@ floating_modifier $mod normal
 # Reload the configuration file
 bindsym $mod+Shift+r reload
 
-# bindsym XF86AudioMute exec pactl set-sink-mute @DEFAULT_SINK@ toggle
+bindsym XF86AudioMicMute exec pactl set-source-mute alsa_input.pci-0000_00_1f.3.analog-stereo toggle
 bindsym XF86AudioMute exec volume toggle
 bindsym XF86AudioRaiseVolume exec volume up
 bindsym XF86AudioLowerVolume exec volume down
 bindsym --locked XF86MonBrightnessUp exec brightnessctl s +5%
 bindsym --locked XF86MonBrightnessDown exec brightnessctl s 5%-
+bindsym $mod+Ctrl+Shift+b exec battery-notify.py --notify
 
 # Exit mode
 set $exit_mode exit: [l]ogout, [r]eboot, [s]leep, [p]oweroff
