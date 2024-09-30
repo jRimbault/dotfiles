@@ -35,6 +35,12 @@ lazy.setup({
             require('lualine').setup()
         end
     },
+    -- scrolloff
+    {
+        'Aasim-A/scrollEOF.nvim',
+        event = { 'CursorMoved', 'WinScrolled', 'WinResized' },
+        opts = {},
+    },
     -- LSP
     {
 		'neovim/nvim-lspconfig',
@@ -73,6 +79,20 @@ lazy.setup({
 							},
 						},
                     }
+                }
+            }
+            -- YAML LSP
+            lspconfig.yamlls.setup {
+                settings = {
+                    validate = true,
+                    -- disable schema store
+                    schemaStore = {
+                        enable = false,
+                        url = "",
+                    },
+                    schemas = {
+                        ["https://gitlab.com/gitlab-org/gitlab/-/raw/master/app/assets/javascripts/editor/schema/ci.json"] = ".gitlab-ci.yml",
+                    },
                 }
             }
 
@@ -237,7 +257,14 @@ lazy.setup({
 			})
 		end
 	},
+    -- Diagnostic
+    {
+        'dgagn/diagflow.nvim',
+        event = 'LspAttach',
+        opts = {}
+    }
 }, opts)
+
 
 -- Basic settings
 vim.opt.compatible = false
@@ -273,7 +300,20 @@ vim.opt.showmatch = true
 vim.opt.hlsearch = true
 
 -- Keep cursor in the middle
-vim.opt.scrolloff = 8
+-- Function to set dynamic scrolloff based on the window size
+local function set_dynamic_scrolloff()
+    local win_height = vim.api.nvim_win_get_height(0) -- get current window height
+    vim.opt.scrolloff = math.floor(win_height / 3) -- adjust scrolloff to be a fraction of window height
+end
+
+-- Create an autocommand to update scrolloff when the window size changes
+vim.api.nvim_create_autocmd({"VimResized", "WinEnter"}, {
+    callback = set_dynamic_scrolloff
+})
+
+-- Call the function initially to set scrolloff
+set_dynamic_scrolloff()
+
 
 -- Disable swap files and backups
 vim.opt.backup = false
@@ -402,16 +442,28 @@ vim.keymap.set('n', ',ta', toggle_all, {
 })
 
 -- Run current file
-local function run_file()
-    if vim.fn.expand("%") ~= "" then
-        vim.cmd("w")
-    end
-    if vim.fn.executable(vim.fn.expand("%")) == 1 then
-        vim.cmd("!" .. vim.fn.expand("%"))
-    end
+-- Lua function to check if the file is executable and run it
+function run_current_file_if_executable()
+  -- Get the full path of the current file
+  local file = vim.fn.expand('%:p')
+
+  -- Check if the file is executable
+  if vim.fn.executable(file) == 1 then
+    -- Save the file first
+    vim.cmd('write')
+    -- Run the file
+    vim.cmd('!' .. file)
+  else
+    print("File is not executable!")
+  end
 end
-vim.keymap.set('n', '<space><space>', run_file, {
-    noremap = true
+
+-- Key binding for double space to run the file if executable
+vim.api.nvim_set_keymap('n', '<space><space>', ':lua run_current_file_if_executable()<CR>', { noremap = true, silent = true })
+
+vim.api.nvim_set_keymap('n', '<C-n>', ':nohlsearch<CR>', {
+    noremap = true,
+    silent = true,
 })
 
 -- Source local config
@@ -427,3 +479,4 @@ vim.keymap.set('n', ',fg', builtin.live_grep, {})
 vim.keymap.set('n', ',fb', builtin.buffers, {})
 vim.keymap.set('n', ',fh', builtin.help_tags, {})
 
+require('scrollEOF').setup()
