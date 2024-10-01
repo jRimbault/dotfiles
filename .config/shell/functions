@@ -263,3 +263,8 @@ who-installed()
 {
     dpkg -S "$(command -v "$1")"
 }
+
+file-to-clipboard()
+{
+    cat "$@" | wl-copy
+}
