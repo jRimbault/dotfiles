@@ -24,6 +24,7 @@ lazy.setup(
         "navarasu/onedark.nvim",
         "fxn/vim-monochrome",
         {"numToStr/Comment.nvim", lazy = false},
+        "ibhagwan/fzf-lua",
         {"nvim-treesitter/nvim-treesitter", build = ":TSUpdate"},
         {
             "nvim-telescope/telescope.nvim",
@@ -472,9 +473,21 @@ vim.api.nvim_create_user_command("RemoveFancyCharacters", remove_fancy_character
 
 -- Pair programming: Insert a Co-authored-by line in commit message
 local function commit_coauthored_by()
-    vim.cmd([[read !echo "Co-authored-by: $(git authors | fzf)"]])
+    -- Run fzf-lua to pick an author
+    local fzf_lua = require('fzf-lua')
+    fzf_lua.fzf_exec("git authors", {
+        actions = {
+            ["default"] = function(selected)
+                if selected then
+                    -- Insert the Co-authored-by line into the current buffer
+                    vim.api.nvim_put({ "Co-authored-by: " .. selected[1] }, "l", false, true)
+                end
+            end,
+        }
+    })
 end
 vim.api.nvim_create_user_command("CommitCoAuthoredBy", commit_coauthored_by, {})
+
 
 -- Status line configuration
 -- vim.opt.statusline = "%f%m%=%l:%c - %03p%% %y %{&fileencoding?&fileencoding:&encoding} [%{&fileformat}]"
