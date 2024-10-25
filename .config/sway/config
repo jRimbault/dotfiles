@@ -77,8 +77,8 @@ input "1160:4132:DELL0A68:00_0488:1024_Touchpad" {
     dwt enabled
     tap enabled
     middle_emulation enabled
-    tap_button_map lmr
-    # tap_button_map lrm
+    # tap_button_map lmr
+    tap_button_map lrm
 }
 input "1133:49271:Logitech_USB_Optical_Mouse" {
     accel_profile "flat"
