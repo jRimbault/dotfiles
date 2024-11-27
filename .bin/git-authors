@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-# show all committers to current branch
+# show all committers to current repository
 
-git log --format='%an <%ae>' $* | sort -u
+git shortlog --summary --email --numbered --all | cut -f 2
