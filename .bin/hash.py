@@ -7,6 +7,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+assert sys.version_info >= (3, 11), "Must use python >=3.11"
 
 @dataclass
 class Options:
