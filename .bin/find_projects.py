@@ -1,5 +1,17 @@
 #!/usr/bin/env python
 
+r"""
+Both of these:
+
+```
+find . -type d \( -name ".git" -o -name ".hg" \) -print0 | xargs -0 dirname
+fd -u --type d '\.(git|hg)$' . | xargs -n1 dirname
+```
+
+perform a lot worse than this single purpose script
+"""
+
+
 import os
 import sys
 from pathlib import Path
@@ -16,11 +28,6 @@ try:
     base = Path(sys.argv[1])
 except IndexError:
     base = Path.cwd()
-# bug and performance fixes to rglob will come in python 3.12 and 3.13
-# as well as the `walk_up=True` option for `relative_to`
-# for now I'll use the `os.walk` function
-# mercurial = (p.parent.relative_to(base) for p in base.rglob("**/.hg"))
-# git = (p.parent.relative_to(base) for p in base.rglob("**/.git"))
-# for project in itertools.chain(mercurial, git):
+
 for project in search_projects(base):
     print(project)
