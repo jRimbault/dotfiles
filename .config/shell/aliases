@@ -76,3 +76,5 @@ alias tunnel-status='ssh -TO check'
 alias tunnel-down='ssh -TO exit'
 
 alias github="/usr/bin/gh"
+
+alias venv-source="source .venv/bin/activate"

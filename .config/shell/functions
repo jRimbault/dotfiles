@@ -243,28 +243,46 @@ swap_symlink_for_copy()
 
 random_data_file()
 {
-    local dest size
-    dest="${1:-/dev/null}"
-    size="${2:-1}"
-    dd if=/dev/urandom bs=1M count=$size | pv > "$dest"
+  local dest size
+  dest="${1:-/dev/null}"
+  size="${2:-1}"
+  dd if=/dev/urandom bs=1M count=$size | pv > "$dest"
 }
 
 show_lines()
 {
-    local start end
-    file="$1"
-    start="${2:-1}"
-    end="${3:-10}"
-    end2=$((end + 1))
-    sed -n "$start,${end}p;${end2}q" "$file"
+  local start end
+  file="$1"
+  start="${2:-1}"
+  end="${3:-10}"
+  end2=$((end + 1))
+  sed -n "$start,${end}p;${end2}q" "$file"
 }
 
 who-installed()
 {
-    dpkg -S "$(command -v "$1")"
+  dpkg -S "$(command -v "$1")"
 }
 
 file-to-clipboard()
 {
-    cat "$@" | wl-copy
+  cat "$@" | wl-copy
+}
+
+
+fzf:preprocess() {
+  local jq_template="$1"
+  jq -rc ". | \"${jq_template}\t\(tojson)\""
+}
+
+fzf:preview() {
+  fzf:preprocess "$1" \
+    | fzf-tmux -p80%,60% -- \
+    --layout=reverse --multi --height=50% --min-height=20 --border \
+    --border-label-pos=2 \
+    --color='header:italic:underline,label:blue' \
+    --delimiter='\t' \
+    --with-nth=1 \
+    --preview 'echo {2} | yq --colors -p json' \
+    | cut -f2
 }
