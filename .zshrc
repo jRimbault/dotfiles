@@ -1,5 +1,9 @@
 #!/usr/bin/env zsh
+
 umask 022
+export HISTSIZE=10000000
+export SAVEHIST="$HISTSIZE"
+
 export ZSH="$HOME/.oh-my-zsh"
 
 ZSH_CUSTOM="$HOME/.config/shell"

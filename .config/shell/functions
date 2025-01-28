@@ -270,19 +270,3 @@ file-to-clipboard()
 }
 
 
-fzf:preprocess() {
-  local jq_template="$1"
-  jq -rc ". | \"${jq_template}\t\(tojson)\""
-}
-
-fzf:preview() {
-  fzf:preprocess "$1" \
-    | fzf-tmux -p80%,60% -- \
-    --layout=reverse --multi --height=50% --min-height=20 --border \
-    --border-label-pos=2 \
-    --color='header:italic:underline,label:blue' \
-    --delimiter='\t' \
-    --with-nth=1 \
-    --preview 'echo {2} | yq --colors -p json' \
-    | cut -f2
-}
