@@ -18,17 +18,17 @@ fn search_projects(base: &Path, sender: mpsc::Sender<PathBuf>) {
     let mut stack = Vec::from([base.to_path_buf()]);
 
     while let Some(path) = stack.pop() {
-        if let Ok(entries) = fs::read_dir(&path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        if path.join(".git").exists() || path.join(".hg").exists() {
-                            sender.send(path).unwrap();
-                        } else {
-                            stack.push(path);
-                        }
-                    }
+        let Ok(entries) = fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries {
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            if path.is_dir() {
+                if path.join(".git").exists() || path.join(".hg").exists() {
+                    sender.send(path).unwrap();
+                } else {
+                    stack.push(path);
                 }
             }
         }
