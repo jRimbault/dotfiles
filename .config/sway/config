@@ -55,9 +55,9 @@ output $desk_display { mode 2560x1440@60Hz; position 0 0 }
 
 ### Idle configuration
 set $lock xkcd_lock
+# timeout 1600 '$lock --daemonize'
+# timeout 3600 'systemctl suspend'
 exec swayidle -w \
-    timeout 1600 '$lock --daemonize' \
-    timeout 3600 'systemctl suspend' \
     before-sleep '$lock --daemonize'
 bindsym $mod+l exec $lock
 
@@ -102,7 +102,8 @@ bindsym $mod+Return exec $term
 bindsym $mod+Shift+q kill
 
 # Start your launcher
-bindsym $mod+space exec 'wofi --show drun,run'
+bindsym $mod+space exec 'wofi --show drun'
+bindsym $mod+Alt+space exec 'wofi --show run'
 
 # Drag floating windows by holding down $mod and left mouse button.
 # Resize them with right mouse button + $mod.

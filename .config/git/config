@@ -14,6 +14,7 @@
     navigate = true
 
 [alias]
+    gumtree = difftool -d --no-symlinks -t gumtree-docker
     # list all defined aliases
     alias = ! git config --get-regexp ^alias\\. | sed -e s/^alias\\.// -e s/\\ /\\ =\\ /
     ## Only git (no hidden deps)
@@ -54,3 +55,6 @@
 
 [maintenance]
 	repo = /home/jrimbault/Documents/gitlab.lan.provenrun.com/jrimbault/board-booker
+
+[difftool "gumtree-docker"]
+	cmd = docker run -v $LOCAL:/diff/left -v $REMOTE:/diff/right -p 4567:4567 gumtreediff/gumtree webdiff left/ right/

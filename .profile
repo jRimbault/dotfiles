@@ -21,11 +21,12 @@ prepend:path()
 prepend:path "/opt/gradle/gradle-5.0/bin"
 prepend:path "/snap/bin"
 prepend:path "$HOME/.cargo/bin"
-prepend:path "$HOME/.gem/ruby/2.5.0/bin"
+prepend:path "$HOME/.local/share/gem/ruby/3.0.0/bin"
 prepend:path "$N_PREFIX/bin"
 prepend:path "$HOME/.local/bin"
 prepend:path "$HOME/.bin"
 prepend:path "$HOME/bin"
+prepend:path "$HOME/.dotnet"
 prepend:path "$GOBIN"
 prepend:path "$HOME/.local/share/JetBrains/Toolbox/scripts"
 

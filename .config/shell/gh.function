@@ -92,25 +92,3 @@ gh()
 #   __proto_gh "User" "$1" "your.git.url.com" "$base_dir" "ssh"
 # }
 
-bb()
-{
-  local user repo base_dir proto
-
-  base_dir=${BB_BASE_DIR:-"$HOME/Documents/bitbucket.org"}
-  proto=${GH_PROTO:-"ssh"}
-
-  if [[ $# -lt 1 ]]; then
-    echo "USAGE: bb [user] [repo]"
-    return
-  fi
-
-  user="$1"
-
-  if [[ $# -eq 1 ]]; then
-    repo="$(bitbucket-repos "$user" | fzf)"
-  else
-    repo="$2"
-  fi
-
-  __proto_gh "$user" "$repo" "bitbucket.org" "$base_dir" "$proto"
-}

@@ -26,7 +26,15 @@ def main():
 def fzf_ask_job(jobs: set[str]):
     try:
         input = "\n".join(jobs).encode()
-        job = subprocess.check_output(["fzf"], input=input)
+        job = subprocess.check_output(
+            [
+                "fzf",
+                "--style=default",
+                "--layout=reverse",
+                "--height=50%",
+            ],
+            input=input,
+        )
         return job.decode().strip()
     except subprocess.CalledProcessError as error:
         if error.returncode == 130:

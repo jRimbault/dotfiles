@@ -134,43 +134,12 @@ has()
   return 0
 }
 
-# hide fugly sed syntax
-__remove_trailing_dotgit()
-{
-  sed -e 's/\(.*\)\/.git/\1/'
-}
-
-__remove_base_dir()
-{
-  sed 's,'"$1"',,g'
-}
-
-# return list of git repos under $1
-# tested other solutions, all were slower...
-#  - "find "$1" -name .git -type d -prune | sed -e 's/\(.*\)\/.git/\1/'" 0.4s
-#  - "find "$1" -name .git -type d -prune | xargs -n 1 dirname" 0.8s
-#  - "find "$1" -type d -exec test -e '{}/.git' ';' -print -prune" 1.1s
-# you really can't beat sed
-# PS: oooh I should have tried in native shell, didn't think of that at the time
-find_git_repos()
-{
-  if command -v fd > /dev/null 2>&1; then
-    fd .git "$1" -HI -t d |
-        __remove_trailing_dotgit |
-        __remove_base_dir "$1/" | uniq
-  else
-    find "$1" -name .git -type d -prune |
-        __remove_trailing_dotgit |
-        __remove_base_dir "$1/" | uniq
-  fi
-}
-
 # fuzzy projects finder
 goto_project()
 {
-  local dest prev_d
+  local dest base
   base="$HOME/Documents"
-  dest="$(find_projects.py "$base" | fzf)"
+  dest="$(find_projects "$base" | fzf --layout=reverse --height=20 --preview "git-preview.sh $base/{1}")"
   [ -z "$dest" ] && return 0
   cd "$base/$dest"
 }
@@ -190,11 +159,10 @@ git_log_pager_short()
   git log -10 --graph --pretty="$format" $* 2> /dev/null
 }
 
-# fuzzy find among the 500 lasts commands issued
 history_fuzzy_finder()
 {
   local exe
-  exe="$(tail -n 5000 "$HISTFILE" | cut -d';' -f 2 | fzf)"
+  exe="$(cut -d';' -f2- "$HISTFILE" | fzf --tmux --style=full --layout=reverse)"
   echo "$exe"
 }
 
@@ -266,7 +234,5 @@ who-installed()
 
 file-to-clipboard()
 {
-  cat "$@" | wl-copy
+  wl-copy --trim-newline < "$@"
 }
-
-

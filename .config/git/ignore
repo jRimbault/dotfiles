@@ -6,3 +6,7 @@
 .idea/
 *.sqlite
 mailer.json
+.venv/
+*.code-workspace
+
+**/.claude/settings.local.json

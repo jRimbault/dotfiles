@@ -89,6 +89,13 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
                 }
             }
         }
+        -- lspconfig.ruff.setup {
+        --     init_options = {
+        --         settings = {
+        --             -- init
+        --         }
+        --     }
+        -- }
         -- YAML LSP
         lspconfig.yamlls.setup {
             settings = {
@@ -415,6 +422,34 @@ local function commit_coauthored_by()
     })
 end
 vim.api.nvim_create_user_command("CommitCoAuthoredBy", commit_coauthored_by, {})
+
+-- :InsertAISuggestions "further prompt"
+local function insert_ai_suggestions(opts)
+    local prompt = table.concat(opts.fargs or {}, " ")
+    local cmd = string.format("git diff --staged | git-llm %s", vim.fn.shellescape(prompt))
+    vim.system({"bash", "-c", cmd}, {
+        text = true
+    }, function(job)
+        vim.schedule(function()
+            if job.code ~= 0 then
+                vim.notify(("InsertAISuggestions failed\n%s"):format(vim.trim(job.stderr or "")), vim.log.levels.ERROR)
+                return
+            end
+            local out = vim.trim(job.stdout or "")
+            if out == "" then
+                vim.notify("InsertAISuggestions: llm returned no text", vim.log.levels.WARN)
+                return
+            end
+            vim.api.nvim_put(vim.split(out, "\n", {
+                plain = true
+            }), "l", false, true)
+        end)
+    end)
+end
+vim.api.nvim_create_user_command("InsertAISuggestions", insert_ai_suggestions, {
+    nargs = "*",
+    desc = "LLM commit message from staged diff"
+})
 
 -- Status line configuration
 -- vim.opt.statusline = "%f%m%=%l:%c - %03p%% %y %{&fileencoding?&fileencoding:&encoding} [%{&fileformat}]"

@@ -36,9 +36,8 @@ fn search_projects(base: &Path, sender: mpsc::Sender<PathBuf>) {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let base = if args.len() > 1 {
-        PathBuf::from(&args[1])
+    let base = if let Some(path) = env::args().nth(1) {
+        PathBuf::from(path)
     } else {
         env::current_dir().expect("Failed to get current directory")
     };

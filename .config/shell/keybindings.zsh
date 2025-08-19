@@ -43,3 +43,18 @@ _zsh_cli_fg() {
 zle -N _zsh_cli_fg
 bindkey ^z _zsh_cli_fg
 
+# activate virtualenv
+venv_sourced=0
+_venv_activate()
+{
+    if [[ $venv_sourced -eq 0 ]]; then
+        venv_sourced=1
+        source ./.venv/bin/activate
+    else
+        venv_sourced=0
+        deactivate
+    fi
+    zle reset-prompt
+}
+zle -N _venv_activate
+bindkey ^v _venv_activate
