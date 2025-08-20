@@ -37,10 +37,3 @@ test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
 eval "$(zoxide init zsh)"
 source <(fzf --zsh)
-
-# bun completions
-[ -s "/home/jrimbault/.bun/_bun" ] && source "/home/jrimbault/.bun/_bun"
-
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
