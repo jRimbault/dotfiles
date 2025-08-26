@@ -1,53 +1,96 @@
-//! This script searches for projects with `.git` or `.hg` directories starting
-//! from a given base directory. If no base directory is provided, it starts
-//! from the current directory.
-//!
-//! # Compilation
-//! To compile this script with optimizations enabled:
-//! ```sh
-//! rustc -O find_projects.rs
-//! ```
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::mpsc;
-use std::thread;
+#!/usr/bin/env -S cargo +nightly -Zscript --quiet
 
-fn search_projects(base: &Path, sender: mpsc::Sender<PathBuf>) {
-    let mut stack = Vec::from([base.to_path_buf()]);
+---
+[package]
+edition = "2024"
 
-    while let Some(path) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&path) else {
-            continue;
-        };
-        for entry in entries {
-            let Ok(entry) = entry else { continue };
-            let path = entry.path();
-            if path.is_dir() {
-                if path.join(".git").exists() || path.join(".hg").exists() {
-                    sender.send(path).unwrap();
-                } else {
-                    stack.push(path);
+[dependencies]
+clap = { version = "4.5.45", features = ["derive"] }
+crossbeam-channel = "0.5.15"
+ignore = "0.4.23"
+---
+
+use clap::Parser;
+use ignore::{DirEntry, WalkBuilder, WalkState};
+use std::{path::PathBuf, thread};
+
+/// Recursively list Git / Mercurial repositories beneath PATH (defaults to CWD)
+#[derive(Parser)]
+struct Args {
+    /// Base directory to start the search
+    #[arg(value_name = "PATH", default_value = ".")]
+    path: PathBuf,
+}
+
+fn main() {
+    let args = Args::parse();
+    let mut results: Vec<_> = thread::scope(|s| {
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let base = args.path.as_path();
+        s.spawn(move || {
+            // WalkBuilder is threaded by default; disable git-ignore handling
+            // so **all** directories (even those ignored) are visited.
+            WalkBuilder::new(base)
+                .standard_filters(false)
+                .threads(
+                    std::thread::available_parallelism()
+                        .map(|n| n.get())
+                        .unwrap_or(2),
+                )
+                .build_parallel()
+                .run(move || {
+                    let sender = sender.clone();
+                    Box::new(move |result| {
+                        let entry = match result {
+                            Ok(e) => e,
+                            Err(_) => return WalkState::Continue, // ignore unreadable paths
+                        };
+
+                        if is_repo_root(&entry) {
+                            sender.send(entry).unwrap();
+                            // Tell the walker not to descend any further into this repository
+                            WalkState::Skip
+                        } else {
+                            WalkState::Continue
+                        }
+                    })
+                });
+        });
+        receiver
+            .into_iter()
+            .filter_map(|entry| {
+                entry
+                    .path()
+                    .strip_prefix(&args.path)
+                    .ok()
+                    .map(PathBuf::from)
+            })
+            .collect()
+    });
+    results.sort();
+    for r in results {
+        println!("{}", r.display());
+    }
+}
+
+fn is_repo_root(dir: &DirEntry) -> bool {
+    let path = dir.path();
+    // Fast checks: ignore files; we only care about directories
+    if !dir.file_type().is_some_and(|ft| ft.is_dir()) {
+        return false;
+    }
+    // Does this directory contain a '.git' or '.hg' child?
+    // We look for **subdirectories** named exactly ".git" or ".hg".
+    // Using std::fs::read_dir keeps us from descending further unless necessary.
+    if let Ok(mut children) = std::fs::read_dir(path) {
+        while let Some(Ok(child)) = children.next() {
+            if child.file_type().is_ok_and(|ft| ft.is_dir()) {
+                let name = child.file_name();
+                if name == ".git" || name == ".hg" {
+                    return true;
                 }
             }
         }
     }
-}
-
-fn main() {
-    let base = if let Some(path) = env::args().nth(1) {
-        PathBuf::from(path)
-    } else {
-        env::current_dir().expect("Failed to get current directory")
-    };
-
-    thread::scope(|s| {
-        let (sender, receiver) = mpsc::channel();
-        s.spawn(|| search_projects(&base, sender));
-
-        for project in receiver {
-            println!("{}", project.strip_prefix(&base).unwrap().display());
-        }
-    });
+    false
 }
