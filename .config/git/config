@@ -1,6 +1,9 @@
 [include]
     path = ~/.gitconfig_local
 
+[includeIf "gitdir:~/Documents/github.com/"]
+    path = ~/.config/git/user-github.inc
+
 [core]
     editor = nvim
     excludesfile = ~/.config/git/ignore
