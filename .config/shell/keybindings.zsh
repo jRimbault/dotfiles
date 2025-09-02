@@ -58,3 +58,26 @@ _venv_activate()
 }
 zle -N _venv_activate
 bindkey ^v _venv_activate
+
+# toggle right prompt (RPROMPT)
+__rprompt_toggled=0
+_toggle_rprompt() {
+    # Save original RPROMPT once
+    if [[ -z $__rprompt_saved ]]; then
+        __rprompt_saved="$RPROMPT"
+    fi
+
+    if [[ $__rprompt_toggled -eq 0 ]]; then
+        __rprompt_toggled=1
+        RPROMPT=""
+        RPS1=""
+    else
+        __rprompt_toggled=0
+        RPROMPT="$__rprompt_saved"
+        RPS1="$__rprompt_saved"
+    fi
+    zle reset-prompt
+}
+zle -N _toggle_rprompt
+# Bind to Ctrl-Y
+bindkey '^y' _toggle_rprompt
