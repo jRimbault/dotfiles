@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-git fetch -v
-git remote | while IFS=$'\n' read -r remote; do
-  git remote prune "$remote"
-done
-git gc --aggressive
