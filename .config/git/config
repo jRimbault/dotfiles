@@ -56,8 +56,5 @@
 [init]
     defaultBranch = main
 
-[maintenance]
-	repo = /home/jrimbault/Documents/gitlab.lan.provenrun.com/jrimbault/board-booker
-
 [difftool "gumtree-docker"]
 	cmd = docker run -v $LOCAL:/diff/left -v $REMOTE:/diff/right -p 4567:4567 gumtreediff/gumtree webdiff left/ right/
