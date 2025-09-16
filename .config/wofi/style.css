@@ -1,72 +1,115 @@
 /*
-* wofi style. Colors are from authors below.
-* Base16 Gruvbox dark, medium
-* Author: Dawid Kurek (dawikur@gmail.com), morhetz (https://github.com/morhetz/gruvbox)
-*
-*/
-@define-color base00 #282828;
-@define-color base01 #3C3836;
-@define-color base02 #504945;
-@define-color base03 #665C54;
-@define-color base04 #BDAE93;
-@define-color base06 #D5C4A1;
-@define-color base06 #EBDBB2;
-@define-color base07 #FBF1C7;
-@define-color base08 #FB4934;
-@define-color base09 #FE8019;
-@define-color base0A #FABD2F;
-@define-color base0B #B8BB26;
-@define-color base0C #8EC07C;
-@define-color base0D #83A598;
-@define-color base0E #D3869B;
-@define-color base0F #D65D0E;
+ * Wofi "Frosted Glass" style
+ * Based on your existing Gruvbox palette, adapted for translucency.
+ * For blur, enable it in your Wayland compositor (e.g., Hyprland).
+ */
+
+@define-color base00 #000000;
+@define-color base01 #1a1a1a;
+@define-color base02 #333333;
+@define-color base03 #4d4d4d;
+@define-color base04 #666666;
+@define-color base05 #999999;
+@define-color base06 #cccccc;
+@define-color base07 #ffffff;
+@define-color base08 #2563eb;
+@define-color base09 #3b82f6;
+@define-color base0A #60a5fa;
+@define-color base0B #93c5fd;
+@define-color base0C #3b82f6;
+@define-color base0D #2563eb;
+@define-color base0E #1d4ed8;
+@define-color base0F #1e40af;
+
+/* Glass variables (more opaque) */
+@define-color glass-bg alpha(@base00, 0.85);
+@define-color glass-elev alpha(@base01, 0.75);
+@define-color glass-input alpha(@base01, 0.80);
+@define-color glass-border alpha(@base04, 0.22);
+@define-color glass-shadow alpha(#000000, 0.35);
+@define-color glass-highlight alpha(@base0C, 0.35);
 
 window {
-    opacity: 1;
-    border:  0px;
-    border-radius: 0px;
-    font-family: monospace;
-    font-size: 14px;
-}
-
-#input {
-	border-radius: 0px;
-    border:  0px;
-    padding: 10px;
-    margin: 0px;
-    font-size: 16px;
-	color: #8EC07C;
-	background-color: #554444;
-}
-
-#inner-box {
-	margin: 0px;
-	color: @base06;
-	background-color: @base00;
+  /* Keep overall opacity so text remains crisp; use alpha colors for glass */
+  opacity: 1.0;
+  border: 0px;
+  border-radius: 0px;
+  background-color: transparent;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.2;
+  /* Soft drop shadow for depth */
+  box-shadow: 0 18px 48px 0 @glass-shadow;
 }
 
 #outer-box {
-	margin: 0px;
-	background-color: @base00;
-    border-radius: 0px;
+  margin: 0px;
+  padding: 6px;
+  border-radius: 0px;
+  background-color: @glass-bg;
+  background-image: linear-gradient(135deg,
+                                    alpha(@base07, 0.05),
+                                    alpha(#000000, 0.12));
+  border: 1px solid @glass-border;
 }
 
-#selected {
-	background-color: #608787;
+#inner-box {
+  margin: 4px;
+  padding: 4px 2px;
+  border-radius: 0px;
+  background-color: @glass-elev;
+  box-shadow: inset 0 1px 0 alpha(@base07, 0.06),
+              inset 0 -1px 0 alpha(#000000, 0.08);
 }
 
-#entry {
-	padding: 0px;
-    margin: 0px;
-	background-color: @base00;
+#input {
+  margin: 0px;
+  padding: 8px 10px;
+  border: 1px solid @glass-border;
+  border-radius: 0px;
+  background-color: @glass-input;
+  color: @base07;
+  font-size: 12px;
+}
+
+#input:focus {
+  border: 1px solid alpha(@base0C, 0.45);
+  box-shadow: 0 0 0 2px alpha(@base0C, 0.20);
 }
 
 #scroll {
-	margin: 5px;
-	background-color: @base00;
+  margin: 2px;
+  background-color: transparent;
+}
+
+#entry {
+  margin: 1px 0px;
+  padding: 2px 6px;
+  border-radius: 0px;
+  background-color: transparent;
+}
+
+#selected {
+  background-color: @glass-highlight;
+  background-image: linear-gradient(90deg,
+                                    alpha(@base07, 0.10),
+                                    alpha(@base07, 0.00));
+  border-left: 2px solid alpha(@base0C, 0.55);
+  border-right: 1px solid alpha(@base07, 0.10);
 }
 
 #text {
-	margin: 0px;
-	padding: 2px 2px 2px 10px;
+  margin: 0px;
+  padding: 4px 6px 4px 8px;
+  color: #FFFFFF; /* maximize contrast */
+  line-height: 1.1;
+}
+
+#selected #text {
+  font-weight: 600;
+}
+
+/* Optional subtle separators inside lists */
+row:not(:last-child) {
+  border-bottom: 1px solid alpha(@base07, 0.12);
 }
