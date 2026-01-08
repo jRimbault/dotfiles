@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+skipped_lines="$1"
+skipped_lines=$((skipped_lines + 1))
+shift
+tail "--lines=+$skipped_lines" $*
