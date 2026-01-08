@@ -44,6 +44,10 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
         end,
         desc = "Buffer Local Keymaps (which-key)"
     }}
+},
+{
+    "alexpasmantier/krust.nvim",
+    ft = "rust",
 }, -- scrolloff
 {
     "Aasim-A/scrollEOF.nvim",

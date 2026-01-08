@@ -1,4 +1,6 @@
 #!/usr/bin/env zsh
+# zmodload zsh/zprof
+# zmodload zsh/datetime; zmodload zsh/parameter; typeset -F SECONDS
 
 umask 022
 export HISTSIZE=10000000
@@ -35,5 +37,4 @@ zstyle ':completion:*:*:git:*' user-commands ${${(M)${(k)commands}:#git-*}/git-/
 
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
-eval "$(zoxide init zsh)"
-source <(fzf --zsh)
+

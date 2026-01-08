@@ -38,6 +38,5 @@ try:
 except IndexError:
     base = Path.cwd()
 
-
 for project in search_projects(base):
     print(project)

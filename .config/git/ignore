@@ -11,3 +11,7 @@ mailer.json
 *.code-workspace
 
 **/.claude/settings.local.json
+.claude/
+AGENT.md
+AGENTS.md
+CLAUDE.md

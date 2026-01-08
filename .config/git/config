@@ -52,9 +52,13 @@
 
 [push]
     followTags = true
+	autoSetupRemote = true
+	default = current
 
 [init]
     defaultBranch = main
 
 [difftool "gumtree-docker"]
 	cmd = docker run -v $LOCAL:/diff/left -v $REMOTE:/diff/right -p 4567:4567 gumtreediff/gumtree webdiff left/ right/
+[maintenance]
+	repo = /home/nobackup/Documents/gitlab.lan.provenrun.com/RnD/Tools/board-booker
