@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+swap () {
+    local tmp first second
+    tmp="$(mktemp)"
+    first="$1"
+    second="$2"
+    mv "$first" "$tmp" \
+        && mv "$second" "$first" \
+        && mv "$tmp" "$second"
+}
+
+swap "$@"

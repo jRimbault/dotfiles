@@ -29,14 +29,14 @@ man()
 }
 
 # swap two files
-swap()
-{
-  local tmp
-  tmp="$(mktemp)"
-  mv "$1" "$tmp" &&
-  mv "$2" "$1" &&
-  mv "$tmp" "$2"
-}
+# swap()
+# {
+#   local tmp
+#   tmp="$(mktemp)"
+#   mv "$1" "$tmp" &&
+#   mv "$2" "$1" &&
+#   mv "$tmp" "$2"
+# }
 
 # archiving to make funny named files
 archive()
