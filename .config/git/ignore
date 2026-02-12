@@ -15,3 +15,5 @@ mailer.json
 AGENT.md
 AGENTS.md
 CLAUDE.md
+copilot-instructions.md
+.github/copilot-instructions.md

@@ -4,7 +4,7 @@ set -eo pipefail
 
 swap () {
     local tmp first second
-    tmp="$(mktemp)"
+    tmp="$(mktemp -u)"
     first="$1"
     second="$2"
     mv "$first" "$tmp" \

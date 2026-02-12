@@ -43,5 +43,3 @@ shopt -s promptvars
 
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
-
-export STM32_PRG_PATH=/opt/stm32/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin

@@ -57,11 +57,8 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
 {
     "neovim/nvim-lspconfig",
     config = function()
-        -- Setup language servers.
-        local lspconfig = require("lspconfig")
-
         -- Rust
-        lspconfig.rust_analyzer.setup {
+        vim.lsp.config("rust_analyzer", {
             -- Server-specific settings. See `:help lspconfig-setup`
             settings = {
                 ["rust-analyzer"] = {
@@ -80,9 +77,9 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
                     }
                 }
             }
-        }
+        })
         -- Python LSP
-        lspconfig.pyright.setup {
+        vim.lsp.config("pyright", {
             settings = {
                 ["pyright"] = {
                     completion = {
@@ -92,7 +89,7 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
                     }
                 }
             }
-        }
+        })
         -- lspconfig.ruff.setup {
         --     init_options = {
         --         settings = {
@@ -101,7 +98,7 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
         --     }
         -- }
         -- YAML LSP
-        lspconfig.yamlls.setup {
+        vim.lsp.config("yamlls", {
             settings = {
                 validate = true,
                 -- disable schema store
@@ -113,16 +110,15 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
                     ["https://gitlab.com/gitlab-org/gitlab/-/raw/master/app/assets/javascripts/editor/schema/ci.json"] = ".gitlab-ci.yml"
                 }
             }
-        }
+        })
 
         -- Bash LSP
-        local configs = require "lspconfig.configs"
-        if not configs.bash_lsp and vim.fn.executable("bash-language-server") == 1 then
-            configs.bash_lsp = {
+        if not vim.lsp.bash_lsp and vim.fn.executable("bash-language-server") == 1 then
+            vim.lsp.bash_lsp = {
                 default_config = {
                     cmd = {"bash-language-server", "start"},
                     filetypes = {"sh"},
-                    root_dir = require("lspconfig").util.find_git_ancestor,
+                    root_dir = vim.lsp.util.find_git_ancestor,
                     init_options = {
                         settings = {
                             args = {}
@@ -131,8 +127,8 @@ lazy.setup({"itspriddle/vim-shellcheck", "navarasu/onedark.nvim", "fxn/vim-monoc
                 }
             }
         end
-        if configs.bash_lsp then
-            lspconfig.bash_lsp.setup {}
+        if vim.lsp.bash_lsp then
+            vim.lsp.config("bash_lsp", {})
         end
 
         -- Global mappings.
