@@ -71,11 +71,12 @@ gh()
   user="$1"
 
   if [[ $# -eq 1 ]]; then
-    repo="$(github-repos "$user" | fzf | cut -d' ' -f1)"
+    repo="$(github-repos "$user" | fzf --layout=reverse --height=20 | cut -d' ' -f1)"
   else
     repo="$2"
   fi
 
+  [ -z "$repo" ] && return 0
   __proto_gh "$user" "$repo" "github.com" "$GH_BASE_DIR" "$GH_PROTO"
 }
 
