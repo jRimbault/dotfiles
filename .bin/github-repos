@@ -1,9 +1,14 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+#
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["httpx"]
+# ///
 """Get the visible repositories for a given GitHub user or organization"""
 
 import argparse
+import asyncio
 import functools
-import http.client
 import json
 import os
 import re
@@ -11,21 +16,16 @@ import sys
 import time
 from datetime import timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from typing import NamedTuple
-from urllib.request import Request, urlopen
+
+import httpx
 
 CACHE_TTL = timedelta(minutes=10)
+GITHUB_API = "https://api.github.com"
 
 
-class HttpResponse(NamedTuple):
-    status: int
-    headers: dict[str, str]
-    body: list | None
-
-
-class FetchResult(NamedTuple):
-    """Return type for fetch functions consumed by the github_cache decorator."""
+class RepoPage(NamedTuple):
+    """A single page of repos as returned by the GitHub API."""
 
     repos: list[dict]
     etag: str | None
@@ -41,10 +41,15 @@ class Repository(NamedTuple):
         return f"{self.name:<30} {self.description[0:89]}"
 
 
+class NotModified(Exception):
+    """Raised by fetch generators when the server returns HTTP 304."""
+
+
 class PublicArgs(NamedTuple):
     """Unauthenticated mode — REST API, public repos only."""
 
     user: str
+    no_cache: bool = False
 
 
 class AuthenticatedArgs(NamedTuple):
@@ -57,20 +62,20 @@ class AuthenticatedArgs(NamedTuple):
 Args = PublicArgs | AuthenticatedArgs
 
 
-def main(args: Args):
+async def main(args: Args):
     match args:
         case AuthenticatedArgs():
-            repos = get_all_repositories_graphql(args)
+            source = get_all_repositories_graphql(args)
         case PublicArgs():
-            repos = get_all_repositories_rest(args)
-    for repository in repos:
-        print(repository, flush=True)
+            source = get_all_repositories_rest(args)
+    async for repo in source:
+        print(repo, flush=True)
 
 
 # -- REST API (unauthenticated, public repos only) --
 
 
-def get_all_repositories_rest(args: PublicArgs):
+async def get_all_repositories_rest(args: PublicArgs):
     """Fetch public repos via REST API with caching and connection reuse."""
 
     def parse_next_link(link_header):
@@ -79,72 +84,64 @@ def get_all_repositories_rest(args: PublicArgs):
         return match.group(1) if match else None
 
     @github_cache
-    def fetch_repos(conn, user, *, etag=None) -> FetchResult | None:
-        """Fetch repos from /users/ endpoint, falling back to /orgs/ for orgs."""
+    async def fetch_repos(client, user, *, etag=None):
+        """Yield RepoPage per page, raise NotModified for 304."""
 
-        def fetch_org_repos(conn, org) -> FetchResult:
+        async def fetch_org_repos(client, org):
             """Fallback for organizations that don't resolve via /users/."""
-            path = f"/orgs/{org}/repos?per_page=100"
-            first_etag = None
-            repos = []
-            while path:
-                resp = conn.get(path)
-                if resp.status != 200:
-                    raise RuntimeError(f"GitHub API error: {resp.status}")
-                if first_etag is None:
-                    first_etag = resp.headers.get("etag")
-                repos.extend(resp.body)
-                next_url = parse_next_link(resp.headers.get("link", ""))
-                path = (
-                    next_url.removeprefix("https://api.github.com")
-                    if next_url
-                    else None
-                )
-            return FetchResult(repos, first_etag)
+            url = f"{GITHUB_API}/orgs/{org}/repos?per_page=100"
+            while url:
+                resp = await client.get(url)
+                if resp.status_code != 200:
+                    raise RuntimeError(f"GitHub API error: {resp.status_code}")
+                yield RepoPage(resp.json(), resp.headers.get("etag"))
+                url = parse_next_link(resp.headers.get("link", ""))
 
-        path = f"/users/{user}/repos?per_page=100"
-        resp = conn.get(path, etag=etag)
+        headers = {"if-none-match": etag} if etag else {}
+        resp = await client.get(
+            f"{GITHUB_API}/users/{user}/repos?per_page=100", headers=headers
+        )
 
-        if resp.status == 304:
-            return None
-        if resp.status == 404:
+        if resp.status_code == 304:
+            raise NotModified
+        if resp.status_code == 404:
             # /users/ endpoint 404s for some orgs, try /orgs/ directly
-            return fetch_org_repos(conn, user)
-        if resp.status != 200:
-            raise RuntimeError(f"GitHub API error: {resp.status}")
+            async for page in fetch_org_repos(client, user):
+                yield page
+            return
+        if resp.status_code != 200:
+            raise RuntimeError(f"GitHub API error: {resp.status_code}")
 
-        first_etag = resp.headers.get("etag")
-        repos = resp.body
+        yield RepoPage(resp.json(), resp.headers.get("etag"))
         next_url = parse_next_link(resp.headers.get("link", ""))
 
         while next_url:
-            # Pagination links are full URLs; extract just the path+query
-            path = next_url.removeprefix("https://api.github.com")
-            resp = conn.get(path)
-            if resp.status != 200:
+            resp = await client.get(next_url)
+            if resp.status_code != 200:
                 raise RuntimeError(
-                    f"GitHub API error during pagination: {resp.status}"
+                    f"GitHub API error during pagination: {resp.status_code}"
                 )
-            repos.extend(resp.body)
+            yield RepoPage(resp.json(), resp.headers.get("etag"))
             next_url = parse_next_link(resp.headers.get("link", ""))
 
-        return FetchResult(repos, first_etag)
-
-    conn = GitHubConnection()
-    try:
-        raw_repos = fetch_repos(conn, args.user)
-    finally:
-        conn.close()
-    for repo in raw_repos:
-        yield Repository(repo["name"], repo.get("description"))
+    async with httpx.AsyncClient(
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "github-repos-cli",
+        }
+    ) as client:
+        async for repo in fetch_repos(client, args.user, no_cache=args.no_cache):
+            yield Repository(repo["name"], repo.get("description"))
 
 
 def github_cache(fn):
-    """Decorator: disk cache with ETag revalidation for GitHub API fetchers.
+    """Decorator for async generators that yield RepoPage per page.
 
-    Wraps a function(conn, user, *, etag=None) -> FetchResult | None:
-      - None when the server returned 304 Not Modified
-      - FetchResult on a fresh fetch
+    Streams individual repo dicts through to the caller while accumulating
+    them for the disk cache. Handles ETag revalidation transparently:
+      - Fresh cache: yields cached repos, no network
+      - 304 Not Modified: refreshes timestamp, yields cached repos
+      - New data: streams pages through, saves to cache at end
     """
 
     class RepoCache:
@@ -204,53 +201,33 @@ def github_cache(fn):
             self._data = data
 
     @functools.wraps(fn)
-    def wrapper(conn, user):
+    async def wrapper(client, user, *, no_cache=False):
         cache = RepoCache(user)
-        if cache.is_fresh():
-            return cache.load()
-        etag = cache.etag if cache.exists() else None
-        result = fn(conn, user, etag=etag)
-        if result is None:
-            # 304 — data unchanged, refresh the timestamp
+        if not no_cache and cache.is_fresh():
+            for repo in cache.load():
+                yield repo
+            return
+
+        etag = cache.etag if not no_cache and cache.exists() else None
+        accumulated = []
+        first_etag = None
+
+        try:
+            async for page in fn(client, user, etag=etag):
+                if first_etag is None:
+                    first_etag = page.etag
+                accumulated.extend(page.repos)
+                for repo in page.repos:
+                    yield repo
+        except NotModified:
             cache.touch()
-            return cache.load()
-        cache.save(result.repos, result.etag)
-        return result.repos
+            for repo in cache.load():
+                yield repo
+            return
+
+        cache.save(accumulated, first_etag)
 
     return wrapper
-
-
-# -- Connection wrapper for persistent HTTPS --
-
-
-class GitHubConnection:
-    """Reuses a single HTTPS connection across paginated GitHub API requests."""
-
-    def __init__(self):
-        self._conn = http.client.HTTPSConnection("api.github.com")
-
-    def get(self, path, *, etag=None) -> HttpResponse:
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "github-repos-cli",
-        }
-        if etag:
-            headers["If-None-Match"] = etag
-
-        self._conn.request("GET", path, headers=headers)
-        response = self._conn.getresponse()
-        resp_headers = {k.lower(): v for k, v in response.getheaders()}
-
-        if response.status == 200:
-            body = json.loads(response.read())
-        else:
-            response.read()  # drain the response to allow connection reuse
-            body = None
-
-        return HttpResponse(response.status, resp_headers, body)
-
-    def close(self):
-        self._conn.close()
 
 
 # -- GraphQL API (requires authentication) --
@@ -277,45 +254,41 @@ GRAPHQL_QUERY = """query ($user: String!, $cursor: String) {
 )
 
 
-def get_all_repositories_graphql(args: AuthenticatedArgs):
+async def get_all_repositories_graphql(args: AuthenticatedArgs):
     """Fetch all visible repos via GraphQL API (authenticated)."""
-    query_repos = query_api(GRAPHQL_QUERY, args.token)
-    graph = query_repos({"user": args.user})
-    yield from graph.repos()
-    while graph.has_next_page:
-        graph = query_repos({"user": args.user, "cursor": graph.end_cursor})
-        yield from graph.repos()
-
-
-def query_api(query, token):
-    def do_query(variables=None):
-        data = json.dumps({"query": query, "variables": variables})
-        request.add_header("Content-Length", len(data))
-        return GraphResponse(fetch(request, data.encode("utf-8")))
-
-    request = Request("https://api.github.com/graphql")
-    request.add_header("Content-Type", "application/json; charset=utf-8")
-    request.add_header("Authorization", f"token {token}")
-    return do_query
-
-
-def fetch(request, data=None):
-    with urlopen(request, data) as stream:
-        return json.load(stream, object_hook=lambda o: SimpleNamespace(**o))
+    async with httpx.AsyncClient(
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"token {args.token}",
+        }
+    ) as client:
+        cursor = None
+        has_next = True
+        while has_next:
+            variables = {"user": args.user}
+            if cursor:
+                variables["cursor"] = cursor
+            resp = await client.post(
+                f"{GITHUB_API}/graphql",
+                json={"query": GRAPHQL_QUERY, "variables": variables},
+            )
+            graph = GraphResponse(resp.json())
+            for repo in graph.repos():
+                yield repo
+            has_next = graph.has_next_page
+            cursor = graph.end_cursor
 
 
 class GraphResponse:
     def __init__(self, data):
-        try:
-            self.repositories = data.data.user.repositories
-        except TypeError:
-            self.repositories = data.data.organization.repositories
-        self.has_next_page = self.repositories.pageInfo.hasNextPage
-        self.end_cursor = self.repositories.pageInfo.endCursor
+        owner = data["data"].get("user") or data["data"].get("organization")
+        self.repositories = owner["repositories"]
+        self.has_next_page = self.repositories["pageInfo"]["hasNextPage"]
+        self.end_cursor = self.repositories["pageInfo"]["endCursor"]
 
     def repos(self):
-        for node in self.repositories.nodes:
-            yield Repository(node.name, node.description)
+        for node in self.repositories["nodes"]:
+            yield Repository(node["name"], node.get("description"))
 
 
 def parse_args(argv=sys.argv[1:]) -> Args:
@@ -326,14 +299,19 @@ def parse_args(argv=sys.argv[1:]) -> Args:
         default=os.environ.get("GITHUB_API_TOKEN"),
         help="GitHub API token (default: $GITHUB_API_TOKEN)",
     )
+    p.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="bypass the disk cache and fetch fresh data",
+    )
     ns = p.parse_args(argv)
     if ns.token:
         return AuthenticatedArgs(user=ns.user, token=ns.token)
-    return PublicArgs(user=ns.user)
+    return PublicArgs(user=ns.user, no_cache=ns.no_cache)
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main(parse_args()))
+        asyncio.run(main(parse_args()))
     except KeyboardInterrupt:
         print()
