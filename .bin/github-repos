@@ -1,18 +1,74 @@
 #!/usr/bin/env python3
+"""Get the visible repositories for a given GitHub user or organization"""
 
 import argparse
 import json
 import os
+import re
 import sys
 from types import SimpleNamespace
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-DESCRIPTION = """Get the visible repositories for a given GitHub user"""
-
-
 def main(args):
-    for repository in get_all_repositories(args.user):
+    token = os.environ.get("GITHUB_API_TOKEN")
+    if token:
+        fetcher = get_all_repositories_graphql(args.user, token)
+    else:
+        fetcher = get_all_repositories_rest(args.user)
+    for repository in fetcher:
         print(repository, flush=True)
+
+
+# -- REST API (unauthenticated, public repos only) --
+
+
+def get_all_repositories_rest(user):
+    """Fetch public repos via REST API, works for both users and orgs."""
+    url = f"https://api.github.com/users/{user}/repos?per_page=100"
+    while url:
+        request = _rest_request(url)
+        try:
+            with urlopen(request) as response:
+                repos = json.load(response)
+                link_header = response.getheader("Link", "")
+                url = _parse_next_link(link_header)
+        except HTTPError as e:
+            if e.code == 404:
+                # /users/ endpoint 404s for some orgs, try /orgs/ directly
+                yield from _get_org_repositories_rest(user)
+                return
+            raise
+        for repo in repos:
+            yield Repository(SimpleNamespace(name=repo["name"], description=repo.get("description")))
+
+
+def _get_org_repositories_rest(org):
+    """Fallback for organizations that don't resolve via /users/."""
+    url = f"https://api.github.com/orgs/{org}/repos?per_page=100"
+    while url:
+        request = _rest_request(url)
+        with urlopen(request) as response:
+            repos = json.load(response)
+            link_header = response.getheader("Link", "")
+            url = _parse_next_link(link_header)
+        for repo in repos:
+            yield Repository(SimpleNamespace(name=repo["name"], description=repo.get("description")))
+
+
+def _rest_request(url):
+    request = Request(url)
+    request.add_header("Accept", "application/vnd.github+json")
+    return request
+
+
+def _parse_next_link(link_header):
+    """Extract the 'next' page URL from a GitHub Link header."""
+    match = re.search(r'<([^>]+)>;\s*rel="next"', link_header)
+    return match.group(1) if match else None
+
+
+# -- GraphQL API (requires authentication) --
 
 
 GRAPHQL_QUERY_DATA = """{
@@ -36,9 +92,9 @@ GRAPHQL_QUERY = """query ($user: String!, $cursor: String) {
 )
 
 
-def get_all_repositories(user):
-    """ Async fetch of all the visible user's repositories """
-    query_repos = query_api(GRAPHQL_QUERY)
+def get_all_repositories_graphql(user, token):
+    """Fetch all visible repos via GraphQL API (authenticated)."""
+    query_repos = query_api(GRAPHQL_QUERY, token)
     graph = query_repos({"user": user})
     yield from graph.repos()
     while graph.has_next_page:
@@ -46,7 +102,7 @@ def get_all_repositories(user):
         yield from graph.repos()
 
 
-def query_api(query):
+def query_api(query, token):
     def do_query(variables=None):
         data = json.dumps({"query": query, "variables": variables})
         request.add_header("Content-Length", len(data))
@@ -54,12 +110,7 @@ def query_api(query):
 
     request = Request("https://api.github.com/graphql")
     request.add_header("Content-Type", "application/json; charset=utf-8")
-    if "GITHUB_API_TOKEN" in os.environ:
-        token = os.environ["GITHUB_API_TOKEN"]
-        request.add_header("Authorization", f"token {token}")
-    else:
-        print("Environment variable GITHUB_API_TOKEN not found", file=sys.stderr)
-
+    request.add_header("Authorization", f"token {token}")
     return do_query
 
 
@@ -68,9 +119,10 @@ def fetch(request, data=None):
         return json.load(stream, object_hook=lambda o: SimpleNamespace(**o))
 
 
-class Repository:
-    """ data class to map the JSON response to a domain object """
+# -- Shared domain types --
 
+
+class Repository:
     def __init__(self, node):
         self.name = node.name
         self.description = node.description
@@ -82,8 +134,6 @@ class Repository:
 
 
 class GraphResponse:
-    """ data class to map the JSON response to a domain object """
-
     def __init__(self, data):
         try:
             self.repositories = data.data.user.repositories
@@ -97,8 +147,8 @@ class GraphResponse:
 
 
 def parse_args(argv=sys.argv[1:]):
-    p = argparse.ArgumentParser(description=DESCRIPTION)
-    p.add_argument("user")
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("user", nargs="?", default=os.environ.get("USER"))
     return p.parse_args(argv)
 
 
