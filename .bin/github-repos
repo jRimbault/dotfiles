@@ -24,6 +24,25 @@ CACHE_TTL = timedelta(minutes=10)
 GITHUB_API = "https://api.github.com"
 
 
+class RateLimited(SystemExit):
+    """Raised when the GitHub API rate limit is exceeded."""
+
+    def __init__(self, resp):
+        reset = resp.headers.get("x-ratelimit-reset")
+        if reset:
+            wait = int(int(reset) - time.time()) // 60
+            msg = f"github: rate limit exceeded, resets in {wait}min"
+        else:
+            msg = "github: rate limit exceeded"
+        super().__init__(msg)
+
+
+def check_rate_limit(resp):
+    """Raise RateLimited if the response indicates rate limit exhaustion."""
+    if resp.status_code == 403 and resp.headers.get("x-ratelimit-remaining") == "0":
+        raise RateLimited(resp)
+
+
 class RepoPage(NamedTuple):
     """A single page of repos as returned by the GitHub API."""
 
@@ -92,6 +111,7 @@ async def get_all_repositories_rest(args: PublicArgs):
             url = f"{GITHUB_API}/orgs/{org}/repos?per_page=100"
             while url:
                 resp = await client.get(url)
+                check_rate_limit(resp)
                 if resp.status_code != 200:
                     raise RuntimeError(f"GitHub API error: {resp.status_code}")
                 yield RepoPage(resp.json(), resp.headers.get("etag"))
@@ -109,6 +129,7 @@ async def get_all_repositories_rest(args: PublicArgs):
             async for page in fetch_org_repos(client, user):
                 yield page
             return
+        check_rate_limit(resp)
         if resp.status_code != 200:
             raise RuntimeError(f"GitHub API error: {resp.status_code}")
 
@@ -117,6 +138,7 @@ async def get_all_repositories_rest(args: PublicArgs):
 
         while next_url:
             resp = await client.get(next_url)
+            check_rate_limit(resp)
             if resp.status_code != 200:
                 raise RuntimeError(
                     f"GitHub API error during pagination: {resp.status_code}"
@@ -224,6 +246,17 @@ def github_cache(fn):
             for repo in cache.load():
                 yield repo
             return
+        except RateLimited:
+            # Serve stale cache if available, otherwise propagate
+            if cache.exists():
+                print(
+                    "github: rate limited, serving stale cache",
+                    file=sys.stderr,
+                )
+                for repo in cache.load():
+                    yield repo
+                return
+            raise
 
         cache.save(accumulated, first_etag)
 
@@ -272,6 +305,7 @@ async def get_all_repositories_graphql(args: AuthenticatedArgs):
                 f"{GITHUB_API}/graphql",
                 json={"query": GRAPHQL_QUERY, "variables": variables},
             )
+            check_rate_limit(resp)
             graph = GraphResponse(resp.json())
             for repo in graph.repos():
                 yield repo
