@@ -2,77 +2,262 @@
 """Get the visible repositories for a given GitHub user or organization"""
 
 import argparse
+import functools
+import http.client
 import json
 import os
 import re
 import sys
+import time
+from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
-from urllib.error import HTTPError
+from typing import NamedTuple
 from urllib.request import Request, urlopen
 
-def main(args):
-    token = os.environ.get("GITHUB_API_TOKEN")
-    if token:
-        fetcher = get_all_repositories_graphql(args.user, token)
-    else:
-        fetcher = get_all_repositories_rest(args.user)
-    for repository in fetcher:
+CACHE_TTL = timedelta(minutes=10)
+
+
+class HttpResponse(NamedTuple):
+    status: int
+    headers: dict[str, str]
+    body: list | None
+
+
+class FetchResult(NamedTuple):
+    """Return type for fetch functions consumed by the github_cache decorator."""
+
+    repos: list[dict]
+    etag: str | None
+
+
+class Repository(NamedTuple):
+    name: str
+    description: str | None
+
+    def __repr__(self):
+        if self.description is None:
+            return self.name
+        return f"{self.name:<30} {self.description[0:89]}"
+
+
+class PublicArgs(NamedTuple):
+    """Unauthenticated mode — REST API, public repos only."""
+
+    user: str
+
+
+class AuthenticatedArgs(NamedTuple):
+    """Authenticated mode — GraphQL API, all visible repos."""
+
+    user: str
+    token: str
+
+
+Args = PublicArgs | AuthenticatedArgs
+
+
+def main(args: Args):
+    match args:
+        case AuthenticatedArgs():
+            repos = get_all_repositories_graphql(args)
+        case PublicArgs():
+            repos = get_all_repositories_rest(args)
+    for repository in repos:
         print(repository, flush=True)
 
 
 # -- REST API (unauthenticated, public repos only) --
 
 
-def get_all_repositories_rest(user):
-    """Fetch public repos via REST API, works for both users and orgs."""
-    url = f"https://api.github.com/users/{user}/repos?per_page=100"
-    while url:
-        request = _rest_request(url)
-        try:
-            with urlopen(request) as response:
-                repos = json.load(response)
-                link_header = response.getheader("Link", "")
-                url = _parse_next_link(link_header)
-        except HTTPError as e:
-            if e.code == 404:
-                # /users/ endpoint 404s for some orgs, try /orgs/ directly
-                yield from _get_org_repositories_rest(user)
-                return
-            raise
-        for repo in repos:
-            yield Repository(SimpleNamespace(name=repo["name"], description=repo.get("description")))
+def get_all_repositories_rest(args: PublicArgs):
+    """Fetch public repos via REST API with caching and connection reuse."""
+
+    def parse_next_link(link_header):
+        """Extract the 'next' page URL from a GitHub Link header."""
+        match = re.search(r'<([^>]+)>;\s*rel="next"', link_header)
+        return match.group(1) if match else None
+
+    @github_cache
+    def fetch_repos(conn, user, *, etag=None) -> FetchResult | None:
+        """Fetch repos from /users/ endpoint, falling back to /orgs/ for orgs."""
+
+        def fetch_org_repos(conn, org) -> FetchResult:
+            """Fallback for organizations that don't resolve via /users/."""
+            path = f"/orgs/{org}/repos?per_page=100"
+            first_etag = None
+            repos = []
+            while path:
+                resp = conn.get(path)
+                if resp.status != 200:
+                    raise RuntimeError(f"GitHub API error: {resp.status}")
+                if first_etag is None:
+                    first_etag = resp.headers.get("etag")
+                repos.extend(resp.body)
+                next_url = parse_next_link(resp.headers.get("link", ""))
+                path = (
+                    next_url.removeprefix("https://api.github.com")
+                    if next_url
+                    else None
+                )
+            return FetchResult(repos, first_etag)
+
+        path = f"/users/{user}/repos?per_page=100"
+        resp = conn.get(path, etag=etag)
+
+        if resp.status == 304:
+            return None
+        if resp.status == 404:
+            # /users/ endpoint 404s for some orgs, try /orgs/ directly
+            return fetch_org_repos(conn, user)
+        if resp.status != 200:
+            raise RuntimeError(f"GitHub API error: {resp.status}")
+
+        first_etag = resp.headers.get("etag")
+        repos = resp.body
+        next_url = parse_next_link(resp.headers.get("link", ""))
+
+        while next_url:
+            # Pagination links are full URLs; extract just the path+query
+            path = next_url.removeprefix("https://api.github.com")
+            resp = conn.get(path)
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"GitHub API error during pagination: {resp.status}"
+                )
+            repos.extend(resp.body)
+            next_url = parse_next_link(resp.headers.get("link", ""))
+
+        return FetchResult(repos, first_etag)
+
+    conn = GitHubConnection()
+    try:
+        raw_repos = fetch_repos(conn, args.user)
+    finally:
+        conn.close()
+    for repo in raw_repos:
+        yield Repository(repo["name"], repo.get("description"))
 
 
-def _get_org_repositories_rest(org):
-    """Fallback for organizations that don't resolve via /users/."""
-    url = f"https://api.github.com/orgs/{org}/repos?per_page=100"
-    while url:
-        request = _rest_request(url)
-        with urlopen(request) as response:
-            repos = json.load(response)
-            link_header = response.getheader("Link", "")
-            url = _parse_next_link(link_header)
-        for repo in repos:
-            yield Repository(SimpleNamespace(name=repo["name"], description=repo.get("description")))
+def github_cache(fn):
+    """Decorator: disk cache with ETag revalidation for GitHub API fetchers.
+
+    Wraps a function(conn, user, *, etag=None) -> FetchResult | None:
+      - None when the server returned 304 Not Modified
+      - FetchResult on a fresh fetch
+    """
+
+    class RepoCache:
+        """Manages a per-user JSON cache file under ~/.cache/github-repos/."""
+
+        def __init__(self, user):
+            self._path = Path.home() / ".cache" / "github-repos" / f"{user}.json"
+            self._data = None
+
+        def _read(self):
+            if self._data is None:
+                try:
+                    self._data = json.loads(self._path.read_text())
+                except (FileNotFoundError, json.JSONDecodeError):
+                    self._data = {}
+            return self._data
+
+        def exists(self):
+            return bool(self._read().get("repos"))
+
+        @property
+        def etag(self):
+            return self._read().get("etag")
+
+        def is_fresh(self):
+            """True if the cache exists and is younger than CACHE_TTL."""
+            data = self._read()
+            timestamp = data.get("timestamp", 0)
+            age = timedelta(seconds=time.time() - timestamp)
+            return bool(data.get("repos")) and age < CACHE_TTL
+
+        def load(self):
+            """Return the raw repo dicts from cache."""
+            return self._read().get("repos", [])
+
+        def touch(self):
+            """Refresh the cache timestamp without changing the data."""
+            data = self._read()
+            data["timestamp"] = time.time()
+            self._write(data)
+
+        def save(self, repos, etag):
+            """Write fetched repos and ETag to disk."""
+            data = {
+                "etag": etag,
+                "timestamp": time.time(),
+                "repos": [
+                    {"name": r["name"], "description": r.get("description")}
+                    for r in repos
+                ],
+            }
+            self._write(data)
+
+        def _write(self, data):
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.write_text(json.dumps(data))
+            self._data = data
+
+    @functools.wraps(fn)
+    def wrapper(conn, user):
+        cache = RepoCache(user)
+        if cache.is_fresh():
+            return cache.load()
+        etag = cache.etag if cache.exists() else None
+        result = fn(conn, user, etag=etag)
+        if result is None:
+            # 304 — data unchanged, refresh the timestamp
+            cache.touch()
+            return cache.load()
+        cache.save(result.repos, result.etag)
+        return result.repos
+
+    return wrapper
 
 
-def _rest_request(url):
-    request = Request(url)
-    request.add_header("Accept", "application/vnd.github+json")
-    return request
+# -- Connection wrapper for persistent HTTPS --
 
 
-def _parse_next_link(link_header):
-    """Extract the 'next' page URL from a GitHub Link header."""
-    match = re.search(r'<([^>]+)>;\s*rel="next"', link_header)
-    return match.group(1) if match else None
+class GitHubConnection:
+    """Reuses a single HTTPS connection across paginated GitHub API requests."""
+
+    def __init__(self):
+        self._conn = http.client.HTTPSConnection("api.github.com")
+
+    def get(self, path, *, etag=None) -> HttpResponse:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "github-repos-cli",
+        }
+        if etag:
+            headers["If-None-Match"] = etag
+
+        self._conn.request("GET", path, headers=headers)
+        response = self._conn.getresponse()
+        resp_headers = {k.lower(): v for k, v in response.getheaders()}
+
+        if response.status == 200:
+            body = json.loads(response.read())
+        else:
+            response.read()  # drain the response to allow connection reuse
+            body = None
+
+        return HttpResponse(response.status, resp_headers, body)
+
+    def close(self):
+        self._conn.close()
 
 
 # -- GraphQL API (requires authentication) --
 
 
 GRAPHQL_QUERY_DATA = """{
-  repositories(ownerAffiliations: OWNER, first: 30, after: $cursor) {
+  repositories(ownerAffiliations: OWNER, first: 100, after: $cursor) {
    nodes {
     name
     description
@@ -92,13 +277,13 @@ GRAPHQL_QUERY = """query ($user: String!, $cursor: String) {
 )
 
 
-def get_all_repositories_graphql(user, token):
+def get_all_repositories_graphql(args: AuthenticatedArgs):
     """Fetch all visible repos via GraphQL API (authenticated)."""
-    query_repos = query_api(GRAPHQL_QUERY, token)
-    graph = query_repos({"user": user})
+    query_repos = query_api(GRAPHQL_QUERY, args.token)
+    graph = query_repos({"user": args.user})
     yield from graph.repos()
     while graph.has_next_page:
-        graph = query_repos({"user": user, "cursor": graph.end_cursor})
+        graph = query_repos({"user": args.user, "cursor": graph.end_cursor})
         yield from graph.repos()
 
 
@@ -119,20 +304,6 @@ def fetch(request, data=None):
         return json.load(stream, object_hook=lambda o: SimpleNamespace(**o))
 
 
-# -- Shared domain types --
-
-
-class Repository:
-    def __init__(self, node):
-        self.name = node.name
-        self.description = node.description
-
-    def __repr__(self):
-        if self.description is None:
-            return self.name
-        return f"{self.name:<30} {self.description[0:89]}"
-
-
 class GraphResponse:
     def __init__(self, data):
         try:
@@ -143,13 +314,22 @@ class GraphResponse:
         self.end_cursor = self.repositories.pageInfo.endCursor
 
     def repos(self):
-        yield from map(Repository, self.repositories.nodes)
+        for node in self.repositories.nodes:
+            yield Repository(node.name, node.description)
 
 
-def parse_args(argv=sys.argv[1:]):
+def parse_args(argv=sys.argv[1:]) -> Args:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("user", nargs="?", default=os.environ.get("USER"))
-    return p.parse_args(argv)
+    p.add_argument(
+        "--token",
+        default=os.environ.get("GITHUB_API_TOKEN"),
+        help="GitHub API token (default: $GITHUB_API_TOKEN)",
+    )
+    ns = p.parse_args(argv)
+    if ns.token:
+        return AuthenticatedArgs(user=ns.user, token=ns.token)
+    return PublicArgs(user=ns.user)
 
 
 if __name__ == "__main__":
