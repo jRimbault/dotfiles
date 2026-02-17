@@ -1,5 +1,14 @@
 #!/usr/bin/env zsh
 
+# Alt+Backspace: backward-kill-word treating dashes as word characters,
+# unlike Ctrl+W which uses the default (oh-my-zsh) WORDCHARS without dashes.
+_backward_kill_word_with_dashes() {
+    local WORDCHARS="${WORDCHARS}-"
+    zle backward-kill-word
+}
+zle -N _backward_kill_word_with_dashes
+bindkey '^[^?' _backward_kill_word_with_dashes
+
 # History search
 autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
 zle -N up-line-or-beginning-search
