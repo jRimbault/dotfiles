@@ -71,7 +71,7 @@ gh()
   user="$1"
 
   if [[ $# -eq 1 ]]; then
-    repo="$(github-repos "$user" | fzf --layout=reverse --height=20 | cut -d' ' -f1)"
+    repo="$(set -o pipefail; github-repos "$user" | fzf --layout=reverse --height=20 --exit-0 | cut -d' ' -f1)"
   else
     repo="$2"
   fi
