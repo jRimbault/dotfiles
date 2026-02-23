@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+curl https://ipinfo.io/ 2> /dev/null | jq -r .ip
