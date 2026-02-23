@@ -13,4 +13,6 @@ git clone --bare <git-repo-url> "$HOME/.dotfiles"
 alias dot='/usr/bin/git --git-dir="$HOME/.dotfiles" --work-tree="$HOME"'
 dot checkout # this might warn about overwritting files
 dot config --local status.showUntrackedFiles no
+dot update-index --skip-worktree README.md
+rm ~/README.md
 ```
