@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Display a new fortune | cowsay on each keypress, or after a timeout."""
+
+from __future__ import annotations
+
+import argparse
+import functools
+import os
+import random
+import select
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import timedelta
+
+DEFAULT_TIMEOUT = timedelta(minutes=5)
+
+
+@dataclass
+class Args:
+    cow_file: str
+    timeout: timedelta
+    fortune_args: list[str]
+
+
+def main(args: Args) -> None:
+    try:
+        while True:
+            os.system("clear")
+            pipe_fortune_to_cowsay(args.fortune_args, args.cow_file)
+            # Wait for Enter or timeout, then loop to the next fortune
+            if not wait_for_input(args.timeout):
+                break
+    except KeyboardInterrupt:
+        pass
+
+
+@functools.cache
+def list_cow_files() -> list[str]:
+    """Ask cowsay for available cow file names."""
+    output = subprocess.run(
+        ["cowsay", "-l"], capture_output=True, text=True, check=True
+    ).stdout
+    # First line is a header ("Cow files in ..."), the rest are space-separated names
+    names = output.split("\n", 1)[1].split()
+    return names if names else ["default"]
+
+
+def pipe_fortune_to_cowsay(fortune_args: list[str], cow: str) -> None:
+    """Run fortune | cowsay -f <cow>, printing the result to stdout."""
+    with (
+        subprocess.Popen(["fortune", *fortune_args], stdout=subprocess.PIPE) as fortune,
+        subprocess.Popen(["cowsay", "-f", cow], stdin=fortune.stdout) as cowsay,
+    ):
+        cowsay.wait()
+
+
+def wait_for_input(timeout: timedelta) -> bool:
+    """Block until stdin is readable (Enter) or timeout elapses.
+
+    Returns False on EOF (stdin closed), True otherwise.
+    """
+    ready, _, _ = select.select([sys.stdin], [], [], timeout.total_seconds())
+    if ready:
+        # readline returns "" on EOF — signal the caller to stop
+        if sys.stdin.readline() == "":
+            return False
+    return True
+
+
+def parse_args(argv: list[str] | None = None) -> Args:
+    parser = argparse.ArgumentParser(
+        description="Display a new fortune in cowsay on each keypress",
+    )
+    parser.add_argument(
+        "-f",
+        dest="cow_file",
+        choices=list_cow_files(),
+        default=random.choice(list_cow_files()),
+        metavar="FILE",
+        help="cowsay cow file (default: random)",
+    )
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        type=lambda s: timedelta(seconds=int(s)),
+        default=DEFAULT_TIMEOUT,
+        help=f"seconds before auto-advancing (default: {int(DEFAULT_TIMEOUT.total_seconds())})",
+    )
+    parser.add_argument(
+        "fortune_args",
+        nargs="*",
+        metavar="fortune-arg",
+        help="arguments passed to fortune (e.g. literature)",
+    )
+    return Args(**vars(parser.parse_args(argv)))
+
+
+if __name__ == "__main__":
+    main(parse_args())
