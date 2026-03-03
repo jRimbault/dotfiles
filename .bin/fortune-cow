@@ -18,9 +18,9 @@ DEFAULT_TIMEOUT = timedelta(minutes=5)
 
 @dataclass
 class Args:
-    cow_file: str
     timeout: timedelta
     fortune_args: list[str]
+    cow_file: str | None
 
 
 def main(args: Args) -> None:
@@ -46,8 +46,10 @@ def list_cow_files() -> list[str]:
     return names if names else ["default"]
 
 
-def pipe_fortune_to_cowsay(fortune_args: list[str], cow: str) -> None:
+def pipe_fortune_to_cowsay(fortune_args: list[str], cow: str | None) -> None:
     """Run fortune | cowsay -f <cow>, printing the result to stdout."""
+    if not cow:
+        cow = random.choice(list_cow_files())
     with (
         subprocess.Popen(["fortune", *fortune_args], stdout=subprocess.PIPE) as fortune,
         subprocess.Popen(["cowsay", "-f", cow], stdin=fortune.stdout) as cowsay,
@@ -76,7 +78,6 @@ def parse_args(argv: list[str] | None = None) -> Args:
         "-f",
         dest="cow_file",
         choices=list_cow_files(),
-        default=random.choice(list_cow_files()),
         metavar="FILE",
         help="cowsay cow file (default: random)",
     )
