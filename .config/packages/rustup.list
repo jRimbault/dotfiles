@@ -1,0 +1,11 @@
+# Installed via rustup/cargo
+rust-analyzer
+
+# Installed via cargo-binstall
+cargo-binstall
+bat
+eza
+fd-find
+zoxide
+lazygit
+ripgrep

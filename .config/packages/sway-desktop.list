@@ -1,0 +1,13 @@
+# Sway desktop environment and Wayland utilities
+sway
+swayidle
+swaylock
+swaybg
+i3status
+wofi
+mako-notifier
+grimshot
+brightnessctl
+poweralertd
+wl-clipboard
+alacritty
