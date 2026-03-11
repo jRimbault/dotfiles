@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# pyright: strict
+"""Delete zsh history entries whose command matches a regex."""
+
+from __future__ import annotations
 
 import argparse
 import os
@@ -6,11 +10,28 @@ import re
 import shutil
 import sys
 import tempfile
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
+HISTORY_ENCODING = "utf8"
+EXTENDED_HISTORY_PREFIX = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);")
 
-def main() -> int:
-    args = parse_args()
+
+@dataclass(frozen=True)
+class Args:
+    pattern: str
+    history_file: Path
+    ignore_case: bool
+
+
+@dataclass(frozen=True)
+class HistoryEntry:
+    raw_text: str
+    command_text: str
+
+
+def main(args: Args) -> int:
     pattern = compile_pattern(args.pattern, args.ignore_case)
     history_path = args.history_file.expanduser().resolve()
 
@@ -23,10 +44,93 @@ def main() -> int:
     return 0
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Delete history entries whose command matches a regex."
+def rewrite_history(history_path: Path, pattern: re.Pattern[str]) -> int:
+    removed = 0
+    temp_path: Path | None = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding=HISTORY_ENCODING,
+            errors="ignore",
+            newline="",
+            dir=history_path.parent,
+            delete=False,
+        ) as tmp:
+            temp_path = Path(tmp.name)
+            with history_path.open(
+                encoding=HISTORY_ENCODING, errors="ignore", newline=""
+            ) as source:
+                for entry in iter_history_entries(source):
+                    if pattern.search(entry.command_text):
+                        removed += 1
+                        continue
+                    tmp.write(entry.raw_text)
+
+        if temp_path is None:
+            raise RuntimeError("temporary history file was not created")
+
+        if removed == 0:
+            temp_path.unlink(missing_ok=True)
+            return 0
+
+        backup_path = history_path.with_name(f"{history_path.name}.bak")
+        shutil.copy2(history_path, backup_path)
+        shutil.copystat(history_path, temp_path)
+        os.replace(temp_path, history_path)
+        return removed
+    except Exception:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise
+
+
+def iter_history_entries(lines: Iterable[str]) -> Iterator[HistoryEntry]:
+    entry_lines: list[str] = []
+    for line in lines:
+        if entry_lines and not has_line_continuation(entry_lines[-1]):
+            yield parse_history_entry(entry_lines)
+            entry_lines = []
+        entry_lines.append(line)
+
+    if entry_lines:
+        yield parse_history_entry(entry_lines)
+
+
+def parse_history_entry(lines: Sequence[str]) -> HistoryEntry:
+    if not lines:
+        raise ValueError("history entry must contain at least one line")
+
+    raw_text = "".join(lines)
+    first_line = lines[0]
+    match = EXTENDED_HISTORY_PREFIX.match(first_line)
+    if match is None:
+        return HistoryEntry(raw_text=raw_text, command_text=raw_text.removesuffix("\n"))
+
+    command_text = first_line[match.end() :] + "".join(lines[1:])
+    return HistoryEntry(
+        raw_text=raw_text,
+        command_text=command_text.removesuffix("\n"),
     )
+
+
+def has_line_continuation(line: str) -> bool:
+    stripped_line = line.removesuffix("\n")
+    trailing_backslashes = len(stripped_line) - len(stripped_line.rstrip("\\"))
+    return trailing_backslashes % 2 == 1
+
+
+def compile_pattern(pattern_text: str, ignore_case: bool) -> re.Pattern[str]:
+    flags = re.IGNORECASE if ignore_case else 0
+    try:
+        return re.compile(pattern_text, flags)
+    except re.error as exc:
+        print(f"invalid regex: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+
+def parse_args(argv: Sequence[str] | None = None) -> Args:
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pattern", help="Python regex matched against the command text")
     parser.add_argument(
         "-f",
@@ -41,53 +145,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="match the regex case-insensitively",
     )
-    return parser.parse_args()
-
-
-def compile_pattern(pattern_text: str, ignore_case: bool) -> re.Pattern[str]:
-    flags = re.IGNORECASE if ignore_case else 0
-    try:
-        return re.compile(pattern_text, flags)
-    except re.error as exc:
-        print(f"invalid regex: {exc}", file=sys.stderr)
-        raise SystemExit(2) from exc
-
-
-def rewrite_history(history_path: Path, pattern: re.Pattern[str]) -> int:
-    removed = 0
-    with tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf8",
-        errors="ignore",
-        dir=history_path.parent,
-        delete=False,
-    ) as tmp:
-        temp_path = Path(tmp.name)
-        with history_path.open(encoding="utf8", errors="ignore") as source:
-            for line in source:
-                if pattern.search(command_text(line)):
-                    removed += 1
-                    continue
-                tmp.write(line)
-
-    if removed == 0:
-        temp_path.unlink()
-        return 0
-
-    backup_path = history_path.with_name(f"{history_path.name}.bak")
-    shutil.copy2(history_path, backup_path)
-    shutil.copystat(history_path, temp_path)
-    os.replace(temp_path, history_path)
-    return removed
-
-
-def command_text(line: str) -> str:
-    if line.startswith(": "):
-        parts = line.split(";", 1)
-        if len(parts) == 2:
-            return parts[1].rstrip("\n")
-    return line.rstrip("\n")
+    namespace = parser.parse_args(list(argv) if argv is not None else None)
+    return Args(
+        pattern=namespace.pattern,
+        history_file=namespace.history_file,
+        ignore_case=namespace.ignore_case,
+    )
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(parse_args()))
