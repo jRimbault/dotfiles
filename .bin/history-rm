@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import re
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+
+def main() -> int:
+    args = parse_args()
+    pattern = compile_pattern(args.pattern, args.ignore_case)
+    history_path = args.history_file.expanduser().resolve()
+
+    if not history_path.exists():
+        print(f"history file not found: {history_path}", file=sys.stderr)
+        return 1
+
+    removed = rewrite_history(history_path, pattern)
+    print(f"removed {removed} entr{'y' if removed == 1 else 'ies'} from {history_path}")
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Delete history entries whose command matches a regex."
+    )
+    parser.add_argument("pattern", help="Python regex matched against the command text")
+    parser.add_argument(
+        "-f",
+        "--history-file",
+        type=Path,
+        default=Path.home() / ".zsh_history",
+        help="history file to rewrite (default: ~/.zsh_history)",
+    )
+    parser.add_argument(
+        "-i",
+        "--ignore-case",
+        action="store_true",
+        help="match the regex case-insensitively",
+    )
+    return parser.parse_args()
+
+
+def compile_pattern(pattern_text: str, ignore_case: bool) -> re.Pattern[str]:
+    flags = re.IGNORECASE if ignore_case else 0
+    try:
+        return re.compile(pattern_text, flags)
+    except re.error as exc:
+        print(f"invalid regex: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+
+def rewrite_history(history_path: Path, pattern: re.Pattern[str]) -> int:
+    removed = 0
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf8",
+        errors="ignore",
+        dir=history_path.parent,
+        delete=False,
+    ) as tmp:
+        temp_path = Path(tmp.name)
+        with history_path.open(encoding="utf8", errors="ignore") as source:
+            for line in source:
+                if pattern.search(command_text(line)):
+                    removed += 1
+                    continue
+                tmp.write(line)
+
+    if removed == 0:
+        temp_path.unlink()
+        return 0
+
+    backup_path = history_path.with_name(f"{history_path.name}.bak")
+    shutil.copy2(history_path, backup_path)
+    shutil.copystat(history_path, temp_path)
+    os.replace(temp_path, history_path)
+    return removed
+
+
+def command_text(line: str) -> str:
+    if line.startswith(": "):
+        parts = line.split(";", 1)
+        if len(parts) == 2:
+            return parts[1].rstrip("\n")
+    return line.rstrip("\n")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
