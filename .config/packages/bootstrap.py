@@ -32,13 +32,17 @@ from pydantic import BaseModel  # ty: ignore[unresolved-import]
 from rich.logging import RichHandler  # ty: ignore[unresolved-import]
 
 type Installer = typing.Callable[[Config], None]
+type GitHubReleaseInstaller = typing.Callable[[Config, str, str], None]
 
 log = logging.getLogger(Path(__file__).stem)
 
 PACKAGES_DIR = Path(__file__).resolve().parent
 
 GITHUB_API_BASE = "https://api.github.com"
+FZF_REPO = "junegunn/fzf"
 NEOVIM_RELEASE_REPO = "neovim/neovim-releases"
+NERD_FONTS_REPO = "ryanoasis/nerd-fonts"
+OH_MY_ZSH_REPO = "ohmyzsh/ohmyzsh"
 NO_DESKTOP_APT_LIST = "apt-no-desktop.list"
 
 
@@ -181,16 +185,30 @@ def install_cargo_binstall(config: Config):
 
 
 def install_github_releases(config: Config):
+    special_installers: dict[str, GitHubReleaseInstaller] = {
+        FZF_REPO: _install_fzf_release,
+        NEOVIM_RELEASE_REPO: _install_neovim_release,
+        NERD_FONTS_REPO: _install_nerd_font_release,
+    }
     for entry in read_list("github-releases.list"):
         repo, _, hint = entry.partition(":")
-        if repo == "junegunn/fzf":
-            _install_fzf(config)
-        elif repo == NEOVIM_RELEASE_REPO:
-            _install_neovim(config)
-        elif repo == "ryanoasis/nerd-fonts":
-            _install_nerd_font(config, hint or "Hack")
-        else:
+        installer = special_installers.get(repo)
+        if installer is None:
             _install_github_tarball(config, repo)
+            continue
+        installer(config, repo, hint)
+
+
+def _install_fzf_release(config: Config, _: str, __: str):
+    _install_fzf(config)
+
+
+def _install_neovim_release(config: Config, repo: str, _: str):
+    _install_neovim(config, repo)
+
+
+def _install_nerd_font_release(config: Config, _: str, hint: str):
+    _install_nerd_font(config, hint or "Hack")
 
 
 def install_standalone(config: Config):
@@ -253,7 +271,7 @@ def _install_fzf(config: Config):
         return
     fzf_dir = config.home / ".fzf"
     if config.refresh_independent:
-        if not _git_clone_or_pull("https://github.com/junegunn/fzf.git", fzf_dir):
+        if not _git_clone_or_pull(f"https://github.com/{FZF_REPO}.git", fzf_dir):
             return
     else:
         if fzf_dir.exists() or has("fzf"):
@@ -265,7 +283,7 @@ def _install_fzf(config: Config):
                 "clone",
                 "--depth",
                 "1",
-                "https://github.com/junegunn/fzf.git",
+                f"https://github.com/{FZF_REPO}.git",
                 str(fzf_dir),
             ]
         )
@@ -285,7 +303,7 @@ def _install_nerd_font(config: Config, font_name: str):
         return
     font_dir = config.home / ".local" / "share" / "fonts"
     font_dir.mkdir(parents=True, exist_ok=True)
-    release = get_latest_release("ryanoasis/nerd-fonts")
+    release = get_latest_release(NERD_FONTS_REPO)
     if not release:
         log.warning("could not fetch Nerd Font releases")
         return
@@ -306,7 +324,7 @@ def _install_nerd_font(config: Config, font_name: str):
         run(["fc-cache", "-f", str(font_dir)])
 
 
-def _install_neovim(config: Config):
+def _install_neovim(config: Config, repo: str):
     log.info("installing Neovim from GitHub releases")
     asset_name = _neovim_linux_tarball_name(platform.machine())
     if not asset_name:
@@ -326,9 +344,9 @@ def _install_neovim(config: Config):
     if not config.refresh_independent and has("nvim"):
         log.warning("nvim already installed")
         return
-    release = get_latest_release(NEOVIM_RELEASE_REPO)
+    release = get_latest_release(repo)
     if not release:
-        log.warning("could not fetch releases for %s", NEOVIM_RELEASE_REPO)
+        log.warning("could not fetch releases for %s", repo)
         return
     asset = release.find_asset(re.compile(rf"^{re.escape(asset_name)}$"))
     if not asset:
@@ -404,7 +422,7 @@ def _install_oh_my_zsh(config: Config):
             log.warning("oh-my-zsh already installed")
             return
         if not _git_clone_or_pull(
-            "https://github.com/ohmyzsh/ohmyzsh.git",
+            f"https://github.com/{OH_MY_ZSH_REPO}.git",
             oh_my_zsh_dir,
             depth=None,
         ):
@@ -417,7 +435,7 @@ def _install_oh_my_zsh(config: Config):
         [
             "curl",
             "-fsSL",
-            "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh",
+            f"https://raw.githubusercontent.com/{OH_MY_ZSH_REPO}/master/tools/install.sh",
         ],
         stdin_to=["sh", "-s", "--", "--unattended"],
     )
