@@ -5,4 +5,6 @@ fd-find
 git-delta
 ripgrep
 zoxide
+# No prebuilt binaries available, falls back to cargo install.
+# Build dependencies are in apt.list.
 alacritty
