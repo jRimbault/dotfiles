@@ -38,6 +38,7 @@ log = logging.getLogger(Path(__file__).stem)
 PACKAGES_DIR = Path(__file__).resolve().parent
 
 GITHUB_API_BASE = "https://api.github.com"
+NEOVIM_RELEASE_REPO = "neovim/neovim-releases"
 NO_DESKTOP_APT_LIST = "apt-no-desktop.list"
 
 
@@ -122,7 +123,7 @@ def install_apt(config: Config):
     log.info("installing %d apt packages", len(packages))
     if config.dry_run:
         for p in packages:
-            log.info("  %s", p)
+            log.info("%s", p)
         return
     run(as_root(["apt-get", "update", "-qq"]))
     run(as_root(["apt-get", "install", "-y", "-qq", *packages]))
@@ -131,7 +132,7 @@ def install_apt(config: Config):
 def install_rustup(config: Config):
     log.info("installing rustup")
     if config.dry_run:
-        log.info("  curl ... https://sh.rustup.rs | sh -s -- -y")
+        log.info("curl ... https://sh.rustup.rs | sh -s -- -y")
         return
     if has("rustup"):
         log.warning("rustup already installed, updating")
@@ -154,7 +155,7 @@ def install_cargo_binstall(config: Config):
     log.info("installing cargo-binstall + %d crates", len(packages))
     if config.dry_run:
         for p in packages:
-            log.info("  %s", p)
+            log.info("%s", p)
         return
     if not has("cargo-binstall"):
         run_piped(
@@ -175,13 +176,14 @@ def install_cargo_binstall(config: Config):
 def install_github_releases(config: Config):
     for entry in read_list("github-releases.list"):
         repo, _, hint = entry.partition(":")
-        match repo:
-            case "junegunn/fzf":
-                _install_fzf(config)
-            case "ryanoasis/nerd-fonts":
-                _install_nerd_font(config, hint or "Hack")
-            case _:
-                _install_github_tarball(config, repo)
+        if repo == "junegunn/fzf":
+            _install_fzf(config)
+        elif repo == NEOVIM_RELEASE_REPO:
+            _install_neovim(config)
+        elif repo == "ryanoasis/nerd-fonts":
+            _install_nerd_font(config, hint or "Hack")
+        else:
+            _install_github_tarball(config, repo)
 
 
 def install_standalone(config: Config):
@@ -205,7 +207,7 @@ def install_uv_tools(config: Config):
     log.info("installing %d uv tools", len(tools))
     if config.dry_run:
         for t in tools:
-            log.info("  uv tool install %s", t)
+            log.info("uv tool install %s", t)
         return
     for tool in tools:
         run(["uv", "tool", "install", tool])
@@ -218,7 +220,7 @@ def install_bun_globals(config: Config):
     log.info("installing %d bun global packages", len(packages))
     if config.dry_run:
         for p in packages:
-            log.info("  bun install -g %s", p)
+            log.info("bun install -g %s", p)
         return
     run(["bun", "install", "-g", *packages])
 
@@ -226,7 +228,7 @@ def install_bun_globals(config: Config):
 def _install_fzf(config: Config):
     log.info("installing fzf from GitHub")
     if config.dry_run:
-        log.info("  git clone fzf + install --bin")
+        log.info("git clone fzf + install --bin")
         return
     if has("fzf"):
         log.warning("fzf already installed")
@@ -251,7 +253,7 @@ def _install_fzf(config: Config):
 def _install_nerd_font(config: Config, font_name: str):
     log.info("installing Nerd Font: %s", font_name)
     if config.dry_run:
-        log.info("  download %s.tar.xz to ~/.local/share/fonts", font_name)
+        log.info("download %s.tar.xz to ~/.local/share/fonts", font_name)
         return
     font_dir = config.home / ".local" / "share" / "fonts"
     font_dir.mkdir(parents=True, exist_ok=True)
@@ -276,11 +278,50 @@ def _install_nerd_font(config: Config, font_name: str):
         run(["fc-cache", "-f", str(font_dir)])
 
 
+def _install_neovim(config: Config):
+    log.info("installing Neovim from GitHub releases")
+    asset_name = _neovim_linux_tarball_name(platform.machine())
+    if not asset_name:
+        log.warning("unsupported architecture for Neovim release installs: %s", platform.machine())
+        return
+    if config.dry_run:
+        log.info("download %s to ~/.local/share/neovim and link ~/.local/bin/nvim", asset_name)
+        return
+    install_dir = config.home / ".local" / "share" / "neovim"
+    link = config.local_bin / "nvim"
+    install_bin = install_dir / "bin" / "nvim"
+    if _same_path(link, install_bin):
+        log.warning("nvim already installed")
+        return
+    release = get_latest_release(NEOVIM_RELEASE_REPO)
+    if not release:
+        log.warning("could not fetch releases for %s", NEOVIM_RELEASE_REPO)
+        return
+    asset = release.find_asset(re.compile(rf"^{re.escape(asset_name)}$"))
+    if not asset:
+        log.warning("could not find Neovim release asset: %s", asset_name)
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        download_and_extract_tar_gz(asset.browser_download_url, tmp)
+        extracted_dir = next(
+            (path for path in Path(tmp).iterdir() if (path / "bin" / "nvim").exists()),
+            None,
+        )
+        if not extracted_dir:
+            log.warning("Neovim release archive did not contain bin/nvim")
+            return
+        install_dir.parent.mkdir(parents=True, exist_ok=True)
+        _remove_path(install_dir)
+        shutil.copytree(extracted_dir, install_dir, symlinks=True)
+    _remove_path(link)
+    link.symlink_to(install_dir / "bin" / "nvim")
+
+
 def _install_github_tarball(config: Config, repo: str):
     name = repo.split("/")[-1]
     log.info("installing %s from GitHub releases", name)
     if config.dry_run:
-        log.info("  download latest %s linux tarball to ~/.local/bin", name)
+        log.info("download latest %s linux tarball to ~/.local/bin", name)
         return
     if has(name):
         log.warning("%s already installed", name)
@@ -305,10 +346,21 @@ def _install_github_tarball(config: Config, repo: str):
         log.warning("binary %s not found in release archive", name)
 
 
+def _neovim_linux_tarball_name(arch: str) -> str | None:
+    match arch:
+        case "x86_64":
+            release_arch = "x86_64"
+        case "aarch64" | "arm64":
+            release_arch = "arm64"
+        case _:
+            return None
+    return f"nvim-linux-{release_arch}.tar.gz"
+
+
 def _install_oh_my_zsh(config: Config):
     log.info("installing oh-my-zsh")
     if config.dry_run:
-        log.info("  curl ... ohmyzsh/install.sh | sh -- --unattended")
+        log.info("curl ... ohmyzsh/install.sh | sh -- --unattended")
         return
     if (config.home / ".oh-my-zsh").exists():
         log.warning("oh-my-zsh already installed")
@@ -326,7 +378,7 @@ def _install_oh_my_zsh(config: Config):
 def _install_uv(config: Config):
     log.info("installing uv")
     if config.dry_run:
-        log.info("  curl -LsSf https://astral.sh/uv/install.sh | sh")
+        log.info("curl -LsSf https://astral.sh/uv/install.sh | sh")
         return
     if has("uv"):
         log.warning("uv already installed")
@@ -337,7 +389,7 @@ def _install_uv(config: Config):
 def _install_bun(config: Config):
     log.info("installing bun")
     if config.dry_run:
-        log.info("  curl -fsSL https://bun.sh/install | bash")
+        log.info("curl -fsSL https://bun.sh/install | bash")
         return
     if has("bun"):
         log.warning("bun already installed")
@@ -439,6 +491,20 @@ def download_and_extract_tar_gz(url: str, dest_dir: str):
         download(url, Path(tmp.name))
         with tarfile.open(tmp.name, mode="r:gz") as tf:
             tf.extractall(dest_dir)
+
+
+def _remove_path(path: Path):
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path)
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return left.exists() and right.exists() and left.samefile(right)
+    except FileNotFoundError:
+        return False
 
 
 def parse_args(argv: list[str] | None = None) -> Config:

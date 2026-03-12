@@ -6,6 +6,7 @@ The package bootstrap entrypoint lives in `.config/packages/bootstrap.sh` and de
 
 - The bootstrap can be run as either a regular user with `sudo` or directly as `root`.
 - When a bootstrap step fails, the overall process exits with a non-zero status and logs the error.
+- Neovim is installed from the official release tarball instead of the Ubuntu `apt` package.
 - `--no-desktop` skips the packages listed in `.config/packages/apt-no-desktop.list`.
 
 ## Container validation
