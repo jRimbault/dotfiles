@@ -1,0 +1,56 @@
+# Shell
+zsh
+
+# Editors
+neovim
+
+# Sway desktop environment
+sway
+swayidle
+swaylock
+swaybg
+i3status
+wofi
+mako-notifier
+grimshot
+brightnessctl
+poweralertd
+wl-clipboard
+
+# CLI utilities
+jq
+pv
+
+# Development
+shellcheck
+gh
+python3
+ruby
+
+# Build dependencies (alacritty)
+build-essential
+cmake
+pkg-config
+libfontconfig1-dev
+libxcb-xfixes0-dev
+libxkbcommon-dev
+
+# Network
+curl
+wget
+dnsutils
+openssh-client
+
+# Media
+mpv
+pulseaudio-utils
+firefox
+cowsay
+fortune-mod
+
+# System
+upower
+libnotify-bin
+diffstat
+xz-utils
+unzip

@@ -1,7 +1,0 @@
-# Development tooling and language servers
-shellcheck
-bash-language-server
-ruff
-ty
-uv
-gh

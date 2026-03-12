@@ -1,0 +1,4 @@
+# Tools with their own install scripts
+oh-my-zsh
+uv
+bun

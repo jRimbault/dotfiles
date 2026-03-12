@@ -1,11 +1,2 @@
-# Installed via rustup/cargo
+# Rustup components
 rust-analyzer
-
-# Installed via cargo-binstall
-cargo-binstall
-bat
-eza
-fd-find
-zoxide
-lazygit
-ripgrep

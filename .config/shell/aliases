@@ -62,7 +62,7 @@ alias sed-trailing-whitespace="sed 's/[[:space:]]\\+$//'"
 alias vi='$EDITOR'
 
 # media
-alias playlist-dl='youtube-dl --extract-audio --ignore-errors --audio-format mp3 -o "%(autonumber)s - %(title)s.%(ext)s"'
+alias playlist-dl='yt-dlp --extract-audio --ignore-errors --audio-format mp3 -o "%(autonumber)s - %(title)s.%(ext)s"'
 
 alias get_keystroke="xev | grep -A2 --line-buffered '^KeyRelease' | sed -n '/keycode /s/^.*keycode \([0-9]*\).* (.*, \(.*\)).*\$/\1 \2/p'"
 
