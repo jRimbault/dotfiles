@@ -6,6 +6,8 @@
 #/
 #/ Options:
 #/   --no-desktop    Skip sway/desktop packages
+#/   --refresh-independent
+#/                  Update independently installed tools to their latest managed version
 #/   --dry-run       Print what would be installed without doing it
 #/   --help          Show this help message
 

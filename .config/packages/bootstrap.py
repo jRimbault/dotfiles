@@ -63,6 +63,7 @@ class GitHubRelease(BaseModel):
 class Config:
     no_desktop: bool = False
     dry_run: bool = False
+    refresh_independent: bool = False
     home: Path = field(default_factory=Path.home)
 
     @property
@@ -155,7 +156,10 @@ def install_cargo_binstall(config: Config):
     log.info("installing cargo-binstall + %d crates", len(packages))
     if config.dry_run:
         for p in packages:
-            log.info("%s", p)
+            if config.refresh_independent:
+                log.info("cargo binstall --no-confirm --force %s", p)
+            else:
+                log.info("cargo binstall --no-confirm %s", p)
         return
     if not has("cargo-binstall"):
         run_piped(
@@ -170,7 +174,10 @@ def install_cargo_binstall(config: Config):
             ],
             stdin_to=["bash"],
         )
-    run(["cargo", "binstall", "--no-confirm", *packages])
+    cmd = ["cargo", "binstall", "--no-confirm", *packages]
+    if config.refresh_independent:
+        cmd.insert(3, "--force")
+    run(cmd)
 
 
 def install_github_releases(config: Config):
@@ -207,10 +214,16 @@ def install_uv_tools(config: Config):
     log.info("installing %d uv tools", len(tools))
     if config.dry_run:
         for t in tools:
-            log.info("uv tool install %s", t)
+            if config.refresh_independent:
+                log.info("uv tool install --upgrade %s", t)
+            else:
+                log.info("uv tool install %s", t)
         return
     for tool in tools:
-        run(["uv", "tool", "install", tool])
+        cmd = ["uv", "tool", "install", tool]
+        if config.refresh_independent:
+            cmd.insert(3, "--upgrade")
+        run(cmd)
 
 
 def install_bun_globals(config: Config):
@@ -218,35 +231,50 @@ def install_bun_globals(config: Config):
     if not packages:
         return
     log.info("installing %d bun global packages", len(packages))
+    resolved_specs = (
+        [_bun_global_spec(package) for package in packages]
+        if config.refresh_independent
+        else packages
+    )
     if config.dry_run:
-        for p in packages:
-            log.info("bun install -g %s", p)
+        for spec in resolved_specs:
+            log.info("bun install -g %s", spec)
         return
-    run(["bun", "install", "-g", *packages])
+    run(["bun", "install", "-g", *resolved_specs])
 
 
 def _install_fzf(config: Config):
     log.info("installing fzf from GitHub")
     if config.dry_run:
-        log.info("git clone fzf + install --bin")
-        return
-    if has("fzf"):
-        log.warning("fzf already installed")
+        if config.refresh_independent:
+            log.info("git clone/update fzf + install --bin")
+        else:
+            log.info("git clone fzf + install --bin")
         return
     fzf_dir = config.home / ".fzf"
-    run(
-        [
-            "git",
-            "clone",
-            "--depth",
-            "1",
-            "https://github.com/junegunn/fzf.git",
-            str(fzf_dir),
-        ]
-    )
+    if config.refresh_independent:
+        if not _git_clone_or_pull("https://github.com/junegunn/fzf.git", fzf_dir):
+            return
+    else:
+        if fzf_dir.exists() or has("fzf"):
+            log.warning("fzf already installed")
+            return
+        run(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "https://github.com/junegunn/fzf.git",
+                str(fzf_dir),
+            ]
+        )
     run([str(fzf_dir / "install"), "--bin"])
     link = config.local_bin / "fzf"
-    if not link.exists():
+    if config.refresh_independent:
+        _remove_path(link)
+        link.symlink_to(fzf_dir / "bin" / "fzf")
+    elif not link.exists():
         link.symlink_to(fzf_dir / "bin" / "fzf")
 
 
@@ -282,15 +310,20 @@ def _install_neovim(config: Config):
     log.info("installing Neovim from GitHub releases")
     asset_name = _neovim_linux_tarball_name(platform.machine())
     if not asset_name:
-        log.warning("unsupported architecture for Neovim release installs: %s", platform.machine())
+        log.warning(
+            "unsupported architecture for Neovim release installs: %s",
+            platform.machine(),
+        )
         return
     if config.dry_run:
-        log.info("download %s to ~/.local/share/neovim and link ~/.local/bin/nvim", asset_name)
+        log.info(
+            "download %s to ~/.local/share/neovim and link ~/.local/bin/nvim",
+            asset_name,
+        )
         return
     install_dir = config.home / ".local" / "share" / "neovim"
     link = config.local_bin / "nvim"
-    install_bin = install_dir / "bin" / "nvim"
-    if _same_path(link, install_bin):
+    if not config.refresh_independent and has("nvim"):
         log.warning("nvim already installed")
         return
     release = get_latest_release(NEOVIM_RELEASE_REPO)
@@ -323,7 +356,7 @@ def _install_github_tarball(config: Config, repo: str):
     if config.dry_run:
         log.info("download latest %s linux tarball to ~/.local/bin", name)
         return
-    if has(name):
+    if not config.refresh_independent and has(name):
         log.warning("%s already installed", name)
         return
     raw_arch = platform.machine()
@@ -360,10 +393,25 @@ def _neovim_linux_tarball_name(arch: str) -> str | None:
 def _install_oh_my_zsh(config: Config):
     log.info("installing oh-my-zsh")
     if config.dry_run:
-        log.info("curl ... ohmyzsh/install.sh | sh -- --unattended")
+        if config.refresh_independent:
+            log.info("git clone/update oh-my-zsh")
+        else:
+            log.info("curl ... ohmyzsh/install.sh | sh -- --unattended")
         return
-    if (config.home / ".oh-my-zsh").exists():
-        log.warning("oh-my-zsh already installed")
+    oh_my_zsh_dir = config.home / ".oh-my-zsh"
+    if oh_my_zsh_dir.exists():
+        if not config.refresh_independent:
+            log.warning("oh-my-zsh already installed")
+            return
+        if not _git_clone_or_pull(
+            "https://github.com/ohmyzsh/ohmyzsh.git",
+            oh_my_zsh_dir,
+            depth=None,
+        ):
+            return
+        zshrc = config.home / ".zshrc"
+        if not zshrc.exists():
+            shutil.copy2(oh_my_zsh_dir / "templates" / "zshrc.zsh-template", zshrc)
         return
     run_piped(
         [
@@ -378,23 +426,35 @@ def _install_oh_my_zsh(config: Config):
 def _install_uv(config: Config):
     log.info("installing uv")
     if config.dry_run:
-        log.info("curl -LsSf https://astral.sh/uv/install.sh | sh")
+        if config.refresh_independent:
+            log.info("uv self update")
+        else:
+            log.info("curl -LsSf https://astral.sh/uv/install.sh | sh")
         return
     if has("uv"):
-        log.warning("uv already installed")
-        return
-    run_piped(["curl", "-LsSf", "https://astral.sh/uv/install.sh"], stdin_to=["sh"])
+        if not config.refresh_independent:
+            log.warning("uv already installed")
+            return
+        run(["uv", "self", "update"])
+    else:
+        run_piped(["curl", "-LsSf", "https://astral.sh/uv/install.sh"], stdin_to=["sh"])
 
 
 def _install_bun(config: Config):
     log.info("installing bun")
     if config.dry_run:
-        log.info("curl -fsSL https://bun.sh/install | bash")
+        if config.refresh_independent:
+            log.info("bun upgrade")
+        else:
+            log.info("curl -fsSL https://bun.sh/install | bash")
         return
     if has("bun"):
-        log.warning("bun already installed")
-        return
-    run_piped(["curl", "-fsSL", "https://bun.sh/install"], stdin_to=["bash"])
+        if not config.refresh_independent:
+            log.warning("bun already installed")
+            return
+        run(["bun", "upgrade"])
+    else:
+        run_piped(["curl", "-fsSL", "https://bun.sh/install"], stdin_to=["bash"])
     extend_path(config.bun_bin)
     node_link = config.bun_bin / "node"
     if not node_link.exists():
@@ -500,11 +560,42 @@ def _remove_path(path: Path):
         shutil.rmtree(path)
 
 
-def _same_path(left: Path, right: Path) -> bool:
-    try:
-        return left.exists() and right.exists() and left.samefile(right)
-    except FileNotFoundError:
-        return False
+def _git_clone_or_pull(repo: str, dest: Path, *, depth: int | None = 1) -> bool:
+    if dest.exists():
+        if not (dest / ".git").exists():
+            log.warning("%s exists but is not a git checkout", dest)
+            return False
+        run(["git", "-C", str(dest), "pull", "--ff-only"])
+        return True
+    cmd = ["git", "clone"]
+    if depth is not None:
+        cmd.extend(["--depth", str(depth)])
+    cmd.extend([repo, str(dest)])
+    run(cmd)
+    return True
+
+
+def _bun_global_spec(package: str) -> str:
+    if package.startswith(
+        (
+            "http://",
+            "https://",
+            "git+",
+            "file:",
+            "link:",
+            "workspace:",
+            "./",
+            "../",
+            "/",
+        )
+    ):
+        return package
+    if ":" in package:
+        return package
+    separator = package.rfind("@")
+    if separator > 0:
+        return package
+    return f"{package}@latest"
 
 
 def parse_args(argv: list[str] | None = None) -> Config:
@@ -522,6 +613,11 @@ def parse_args(argv: list[str] | None = None) -> Config:
         help="print what would be installed without doing it",
     )
     parser.add_argument(
+        "--refresh-independent",
+        action="store_true",
+        help="update independently installed tools to their latest managed version",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -534,7 +630,11 @@ def parse_args(argv: list[str] | None = None) -> Config:
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True, markup=True)],
     )
-    return Config(no_desktop=ns.no_desktop, dry_run=ns.dry_run)
+    return Config(
+        no_desktop=ns.no_desktop,
+        dry_run=ns.dry_run,
+        refresh_independent=ns.refresh_independent,
+    )
 
 
 if __name__ == "__main__":
