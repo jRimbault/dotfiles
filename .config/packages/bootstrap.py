@@ -43,6 +43,7 @@ FZF_REPO = "junegunn/fzf"
 NEOVIM_RELEASE_REPO = "neovim/neovim-releases"
 NERD_FONTS_REPO = "ryanoasis/nerd-fonts"
 OH_MY_ZSH_REPO = "ohmyzsh/ohmyzsh"
+APT_NO_RECOMMENDS_SUFFIX = "[no-recommends]"
 NO_DESKTOP_APT_LIST = "apt-no-desktop.list"
 
 
@@ -61,6 +62,12 @@ class GitHubRelease(BaseModel):
             if pattern.search(asset.name):
                 return asset
         return None
+
+
+@dataclass(frozen=True)
+class AptPackage:
+    name: str
+    no_recommends: bool = False
 
 
 @dataclass
@@ -118,20 +125,45 @@ def main(config: Config) -> int:
 
 
 def install_apt(config: Config):
-    packages = read_list("apt.list")
+    packages = read_apt_list("apt.list")
     if config.no_desktop:
         excluded_packages = set(read_list(NO_DESKTOP_APT_LIST))
-        packages = [p for p in packages if p not in excluded_packages]
+        packages = [p for p in packages if p.name not in excluded_packages]
     if not packages:
         log.warning("no apt packages to install")
         return
-    log.info("installing %d apt packages", len(packages))
+    default_packages = [p.name for p in packages if not p.no_recommends]
+    no_recommends_packages = [p.name for p in packages if p.no_recommends]
+    if no_recommends_packages:
+        log.info(
+            "installing %d apt packages (%d without recommends)",
+            len(packages),
+            len(no_recommends_packages),
+        )
+    else:
+        log.info("installing %d apt packages", len(packages))
     if config.dry_run:
-        for p in packages:
-            log.info("%s", p)
+        for package in default_packages:
+            log.info("%s", package)
+        for package in no_recommends_packages:
+            log.info("%s %s", package, APT_NO_RECOMMENDS_SUFFIX)
         return
     run(as_root(["apt-get", "update", "-qq"]))
-    run(as_root(["apt-get", "install", "-y", "-qq", *packages]))
+    if default_packages:
+        run(as_root(["apt-get", "install", "-y", "-qq", *default_packages]))
+    if no_recommends_packages:
+        run(
+            as_root(
+                [
+                    "apt-get",
+                    "install",
+                    "-y",
+                    "-qq",
+                    "--no-install-recommends",
+                    *no_recommends_packages,
+                ]
+            )
+        )
 
 
 def install_rustup(config: Config):
@@ -492,6 +524,19 @@ def read_list(name: str) -> list[str]:
         if line:
             entries.append(line)
     return entries
+
+
+def read_apt_list(name: str) -> list[AptPackage]:
+    return [parse_apt_package(entry) for entry in read_list(name)]
+
+
+def parse_apt_package(entry: str) -> AptPackage:
+    if entry.endswith(APT_NO_RECOMMENDS_SUFFIX):
+        name = entry.removesuffix(APT_NO_RECOMMENDS_SUFFIX).rstrip()
+        if not name:
+            raise ValueError(f"invalid apt package entry: {entry!r}")
+        return AptPackage(name=name, no_recommends=True)
+    return AptPackage(name=entry)
 
 
 def run(cmd: list[str], **kwargs: typing.Any):

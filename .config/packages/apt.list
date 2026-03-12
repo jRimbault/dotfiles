@@ -39,7 +39,8 @@ dnsutils
 openssh-client
 
 # Media
-mpv
+# Append [no-recommends] to skip optional apt recommendations for a package.
+mpv [no-recommends]
 pulseaudio-utils
 firefox
 cowsay
