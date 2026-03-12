@@ -1,0 +1,11 @@
+# Shell completions and tool initialization
+# Detects the current shell and sources completions accordingly
+
+CWSHELL=$(basename "$(ps -p $$ -o 'comm=')")
+
+command -v zoxide > /dev/null 2>&1 && source <(zoxide init "$CWSHELL")
+command -v fzf > /dev/null 2>&1 && source <(fzf "--$CWSHELL")
+command -v uv > /dev/null 2>&1 && source <(uv generate-shell-completion "$CWSHELL")
+command -v ruff > /dev/null 2>&1 && source <(ruff generate-shell-completion "$CWSHELL")
+
+unset CWSHELL

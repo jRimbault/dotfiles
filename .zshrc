@@ -38,3 +38,6 @@ zstyle ':completion:*:*:git:*' user-commands ${${(M)${(k)commands}:#git-*}/git-/
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
 
+# Source completions after .profile sets up PATH (e.g. ~/.cargo/bin)
+test -f "$ZSH_CUSTOM/completions" && source "$ZSH_CUSTOM/completions"
+

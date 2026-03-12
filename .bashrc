@@ -43,3 +43,6 @@ shopt -s promptvars
 
 test -f ~/.env && . ~/.env # if environment overwrite previous settings
 test -f ~/.profile && . ~/.profile
+
+# Source completions after .profile sets up PATH (e.g. ~/.cargo/bin)
+test -f "$HOME/.config/shell/completions" && source "$HOME/.config/shell/completions"
