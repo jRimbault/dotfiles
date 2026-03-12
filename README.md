@@ -16,3 +16,5 @@ dot config --local status.showUntrackedFiles no
 dot update-index --skip-worktree README.md
 rm ~/README.md
 ```
+
+Bootstrap package installation is documented in `.config/packages/bootstrap.md`.

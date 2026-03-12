@@ -18,6 +18,12 @@ usage() { grep "^#/" "$0" | cut -c4-; }
 log()  { printf '\033[1;34m>>>\033[0m %s\n' "$*"; }
 err()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
+if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    APT_PREFIX=()
+else
+    APT_PREFIX=(sudo)
+fi
+
 for arg in "$@"; do
     case "$arg" in
         --help) usage; exit 0 ;;
@@ -26,8 +32,8 @@ done
 
 # Ensure minimal apt prerequisites for the rest of the bootstrap
 log "installing apt prerequisites"
-sudo apt-get update -qq
-sudo apt-get install -y -qq curl git >/dev/null
+"${APT_PREFIX[@]}" apt-get update -qq
+"${APT_PREFIX[@]}" apt-get install -y -qq curl git >/dev/null
 
 # Install uv if not present
 if ! command -v uv >/dev/null 2>&1; then

@@ -2,7 +2,7 @@
 #
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["rich", "httpx", "pydantic"]
+# dependencies = ["rich==14.3.3", "httpx==0.28.1", "pydantic==2.12.5"]
 # ///
 """Bootstrap a fresh Ubuntu/Debian system with required packages.
 
@@ -17,6 +17,7 @@ import logging
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -105,12 +106,22 @@ def main(config: Config) -> int:
         ("uv tools", install_uv_tools),
         ("bun global packages", install_bun_globals),
     ]
+    failures: list[str] = []
     for label, step in steps:
         log.info("[bold]%s[/bold]", label, extra={"markup": True})
         try:
             step(config)
         except Exception:
             log.exception("failed during: %s", label)
+            failures.append(label)
+
+    if failures:
+        log.error(
+            "[bold red]bootstrap failed[/bold red]: %s",
+            ", ".join(failures),
+            extra={"markup": True},
+        )
+        return 1
 
     log.info("[bold green]bootstrap complete[/bold green]", extra={"markup": True})
     return 0
@@ -128,8 +139,8 @@ def install_apt(config: Config):
         for p in packages:
             log.info("  %s", p)
         return
-    run(["sudo", "apt-get", "update", "-qq"])
-    run(["sudo", "apt-get", "install", "-y", "-qq", *packages])
+    run(as_root(["apt-get", "update", "-qq"]))
+    run(as_root(["apt-get", "install", "-y", "-qq", *packages]))
 
 
 def install_rustup(config: Config):
@@ -142,7 +153,7 @@ def install_rustup(config: Config):
         run(["rustup", "update"])
     else:
         run_piped(
-            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs",
+            ["curl", "--proto", "=https", "--tlsv1.2", "-sSf", "https://sh.rustup.rs"],
             stdin_to=["sh", "-s", "--", "-y"],
         )
         source_cargo_env()
@@ -162,8 +173,15 @@ def install_cargo_binstall(config: Config):
         return
     if not has("cargo-binstall"):
         run_piped(
-            "curl -L --proto '=https' --tlsv1.2 -sSf "
-            "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh",
+            [
+                "curl",
+                "-L",
+                "--proto",
+                "=https",
+                "--tlsv1.2",
+                "-sSf",
+                "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh",
+            ],
             stdin_to=["bash"],
         )
     run(["cargo", "binstall", "--no-confirm", *packages])
@@ -311,7 +329,11 @@ def _install_oh_my_zsh(config: Config):
         log.warning("oh-my-zsh already installed")
         return
     run_piped(
-        "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh",
+        [
+            "curl",
+            "-fsSL",
+            "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh",
+        ],
         stdin_to=["sh", "-s", "--", "--unattended"],
     )
 
@@ -324,7 +346,7 @@ def _install_uv(config: Config):
     if has("uv"):
         log.warning("uv already installed")
         return
-    run_piped("curl -LsSf https://astral.sh/uv/install.sh", stdin_to=["sh"])
+    run_piped(["curl", "-LsSf", "https://astral.sh/uv/install.sh"], stdin_to=["sh"])
 
 
 def _install_bun(config: Config):
@@ -335,7 +357,7 @@ def _install_bun(config: Config):
     if has("bun"):
         log.warning("bun already installed")
         return
-    run_piped("curl -fsSL https://bun.sh/install", stdin_to=["bash"])
+    run_piped(["curl", "-fsSL", "https://bun.sh/install"], stdin_to=["bash"])
     extend_path(config.bun_bin)
     node_link = config.bun_bin / "node"
     if not node_link.exists():
@@ -363,11 +385,16 @@ def run(cmd: list[str], **kwargs: typing.Any):
     subprocess.run(cmd, check=True, **kwargs)
 
 
-def run_piped(curl_cmd: str, *, stdin_to: list[str]):
+def run_piped(cmd: list[str], *, stdin_to: list[str]):
     """Run a 'curl ... | installer' pattern."""
-    curl_args = curl_cmd.split()
-    with subprocess.Popen(curl_args, stdout=subprocess.PIPE) as curl:
+    log.debug("+ %s | %s", shlex.join(cmd), shlex.join(stdin_to))
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as curl:
         subprocess.run(stdin_to, stdin=curl.stdout, check=True)
+
+
+def as_root(cmd: list[str]) -> list[str]:
+    """Run apt commands via sudo unless the current process is already root."""
+    return cmd if os.geteuid() == 0 else ["sudo", *cmd]
 
 
 def has(cmd: str) -> bool:
