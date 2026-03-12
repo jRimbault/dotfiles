@@ -469,7 +469,7 @@ def _install_oh_my_zsh(config: Config):
             "-fsSL",
             f"https://raw.githubusercontent.com/{OH_MY_ZSH_REPO}/master/tools/install.sh",
         ],
-        stdin_to=["sh", "-s", "--", "--unattended"],
+        stdin_to=["sh", "-s", "--", "--unattended", "--keep-zshrc"],
     )
 
 
