@@ -6,7 +6,7 @@ The package bootstrap entrypoint lives in `.config/packages/bootstrap.sh` and de
 
 - The bootstrap can be run as either a regular user with `sudo` or directly as `root`.
 - When a bootstrap step fails, the overall process exits with a non-zero status and logs the error.
-- `--no-desktop` skips the sway-related desktop packages listed in `.config/packages/apt.list`.
+- `--no-desktop` skips the packages listed in `.config/packages/apt-no-desktop.list`.
 
 ## Container validation
 

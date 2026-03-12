@@ -1,0 +1,12 @@
+# Packages skipped from apt.list when --no-desktop is set
+sway
+swayidle
+swaylock
+swaybg
+i3status
+wofi
+mako-notifier
+grimshot
+brightnessctl
+poweralertd
+wl-clipboard

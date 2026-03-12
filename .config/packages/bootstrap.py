@@ -38,23 +38,7 @@ log = logging.getLogger(Path(__file__).stem)
 PACKAGES_DIR = Path(__file__).resolve().parent
 
 GITHUB_API_BASE = "https://api.github.com"
-
-# Desktop packages that --no-desktop will skip from apt.list
-DESKTOP_PACKAGES = frozenset(
-    {
-        "sway",
-        "swayidle",
-        "swaylock",
-        "swaybg",
-        "i3status",
-        "wofi",
-        "mako-notifier",
-        "grimshot",
-        "brightnessctl",
-        "poweralertd",
-        "wl-clipboard",
-    }
-)
+NO_DESKTOP_APT_LIST = "apt-no-desktop.list"
 
 
 class GitHubAsset(BaseModel):
@@ -130,7 +114,8 @@ def main(config: Config) -> int:
 def install_apt(config: Config):
     packages = read_list("apt.list")
     if config.no_desktop:
-        packages = [p for p in packages if p not in DESKTOP_PACKAGES]
+        excluded_packages = set(read_list(NO_DESKTOP_APT_LIST))
+        packages = [p for p in packages if p not in excluded_packages]
     if not packages:
         log.warning("no apt packages to install")
         return
