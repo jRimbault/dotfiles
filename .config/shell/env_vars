@@ -29,3 +29,4 @@ fi
 
 export PYTHONDONTWRITEBYTECODE="true"
 export LESS="-F -R -X"
+export RIPGREP_CONFIG_PATH="$HOME/.config/ripgrep/defaultflags"
