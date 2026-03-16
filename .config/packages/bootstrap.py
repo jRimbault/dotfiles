@@ -91,7 +91,7 @@ class Config:
     @property
     def bun_bin(self) -> Path:
         return self.home / ".bun" / "bin"
-    
+
     def should_refresh(self, package: str) -> bool:
         """Check if a package should be refreshed based on refresh_packages filter."""
         if not self.refresh_independent:
@@ -105,15 +105,24 @@ def main(config: Config) -> int:
     config.local_bin.mkdir(parents=True, exist_ok=True)
     extend_path(config.local_bin, config.cargo_bin, config.bun_bin)
 
-    steps: list[tuple[str, Installer]] = [
-        ("apt packages", install_apt),
-        ("rustup", install_rustup),
-        ("cargo-binstall crates", install_cargo_binstall),
-        ("GitHub releases", install_github_releases),
-        ("standalone tools", install_standalone),
-        ("uv tools", install_uv_tools),
-        ("bun global packages", install_bun_globals),
-    ]
+    # When refreshing independent tools, skip system package managers
+    if config.refresh_independent:
+        steps: list[tuple[str, Installer]] = [
+            ("GitHub releases", install_github_releases),
+            ("standalone tools", install_standalone),
+            ("uv tools", install_uv_tools),
+            ("bun global packages", install_bun_globals),
+        ]
+    else:
+        steps: list[tuple[str, Installer]] = [
+            ("apt packages", install_apt),
+            ("rustup", install_rustup),
+            ("cargo-binstall crates", install_cargo_binstall),
+            ("GitHub releases", install_github_releases),
+            ("standalone tools", install_standalone),
+            ("uv tools", install_uv_tools),
+            ("bun global packages", install_bun_globals),
+        ]
     failures: list[str] = []
     for label, step in steps:
         log.info("[bold]%s[/bold]", label, extra={"markup": True})
@@ -431,7 +440,9 @@ def _install_lnav(config: Config):
         return
     asset = _find_lnav_asset(release, raw_arch)
     if not asset:
-        log.warning("could not find release asset for %s (linux-%s)", LNAV_REPO, raw_arch)
+        log.warning(
+            "could not find release asset for %s (linux-%s)", LNAV_REPO, raw_arch
+        )
         return
     with tempfile.TemporaryDirectory() as tmp:
         download_and_extract_zip(asset.browser_download_url, tmp)
@@ -645,9 +656,7 @@ def _find_linux_tarball_asset(release: GitHubRelease, arch: str) -> GitHubAsset 
 
 def _find_lnav_asset(release: GitHubRelease, arch: str) -> GitHubAsset | None:
     """Find a Linux lnav asset matching the given architecture."""
-    arch_variants = (
-        {"linux-musl-x86_64"} if arch == "x86_64" else {"linux-musl-arm64"}
-    )
+    arch_variants = {"linux-musl-x86_64"} if arch == "x86_64" else {"linux-musl-arm64"}
     arch_pattern = "|".join(re.escape(a) for a in arch_variants)
     pattern = re.compile(rf"lnav-.*-({arch_pattern})\.zip$")
     return release.find_asset(pattern)
@@ -728,6 +737,36 @@ def _bun_global_spec(package: str) -> str:
     return f"{package}@latest"
 
 
+VALID_REFRESH_PACKAGES = {
+    "rustup",
+    "cargo-binstall",
+    "fzf",
+    "neovim",
+    "nerd-fonts",
+    "gitlab-ci-local",
+    "lazygit",
+    "lnav",
+    "oh-my-zsh",
+    "uv",
+    "bun",
+    "uv-tools",
+}
+
+
+def _validate_refresh_packages(value: str) -> set[str]:
+    """Validate and parse comma-separated package names for --refresh-independent."""
+    if not value:
+        return set()
+    packages = {p.strip() for p in value.split(",")}
+    invalid = packages - VALID_REFRESH_PACKAGES
+    if invalid:
+        valid_list = ", ".join(sorted(VALID_REFRESH_PACKAGES))
+        raise argparse.ArgumentTypeError(
+            f"invalid package(s): {', '.join(sorted(invalid))}. Valid packages are: {valid_list}"
+        )
+    return packages
+
+
 def parse_args(argv: list[str] | None = None) -> Config:
     parser = argparse.ArgumentParser(
         description="Bootstrap a fresh Ubuntu/Debian system with required packages.",
@@ -746,6 +785,7 @@ def parse_args(argv: list[str] | None = None) -> Config:
         "--refresh-independent",
         nargs="?",
         const="",
+        type=_validate_refresh_packages,
         metavar="PACKAGES",
         help="update independently installed tools to their latest managed version; optionally specify comma-separated packages to refresh only those (no spaces in list)",
     )
@@ -762,15 +802,13 @@ def parse_args(argv: list[str] | None = None) -> Config:
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True, markup=True)],
     )
-    refresh_packages: set[str] = set()
-    if ns.refresh_independent is not None:
-        if ns.refresh_independent:
-            refresh_packages = set(ns.refresh_independent.split(","))
     return Config(
         no_desktop=ns.no_desktop,
         dry_run=ns.dry_run,
         refresh_independent=ns.refresh_independent is not None,
-        refresh_packages=refresh_packages,
+        refresh_packages=ns.refresh_independent
+        if ns.refresh_independent is not None
+        else set(),
     )
 
 
