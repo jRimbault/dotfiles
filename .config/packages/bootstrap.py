@@ -24,6 +24,7 @@ import sys
 import tarfile
 import tempfile
 import typing
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -43,6 +44,7 @@ FZF_REPO = "junegunn/fzf"
 NEOVIM_RELEASE_REPO = "neovim/neovim-releases"
 NERD_FONTS_REPO = "ryanoasis/nerd-fonts"
 OH_MY_ZSH_REPO = "ohmyzsh/ohmyzsh"
+LNAV_REPO = "tstack/lnav"
 APT_NO_RECOMMENDS_SUFFIX = "[no-recommends]"
 NO_DESKTOP_APT_LIST = "apt-no-desktop.list"
 
@@ -75,6 +77,7 @@ class Config:
     no_desktop: bool = False
     dry_run: bool = False
     refresh_independent: bool = False
+    refresh_packages: set[str] = field(default_factory=set)
     home: Path = field(default_factory=Path.home)
 
     @property
@@ -88,6 +91,14 @@ class Config:
     @property
     def bun_bin(self) -> Path:
         return self.home / ".bun" / "bin"
+    
+    def should_refresh(self, package: str) -> bool:
+        """Check if a package should be refreshed based on refresh_packages filter."""
+        if not self.refresh_independent:
+            return False
+        if not self.refresh_packages:
+            return True
+        return package in self.refresh_packages
 
 
 def main(config: Config) -> int:
@@ -192,7 +203,7 @@ def install_cargo_binstall(config: Config):
     log.info("installing cargo-binstall + %d crates", len(packages))
     if config.dry_run:
         for p in packages:
-            if config.refresh_independent:
+            if config.should_refresh("cargo-binstall"):
                 log.info("cargo binstall --no-confirm --force %s", p)
             else:
                 log.info("cargo binstall --no-confirm %s", p)
@@ -211,7 +222,7 @@ def install_cargo_binstall(config: Config):
             stdin_to=["bash"],
         )
     cmd = ["cargo", "binstall", "--no-confirm", *packages]
-    if config.refresh_independent:
+    if config.should_refresh("cargo-binstall"):
         cmd.insert(3, "--force")
     run(cmd)
 
@@ -221,6 +232,7 @@ def install_github_releases(config: Config):
         FZF_REPO: _install_fzf_release,
         NEOVIM_RELEASE_REPO: _install_neovim_release,
         NERD_FONTS_REPO: _install_nerd_font_release,
+        LNAV_REPO: _install_lnav_release,
     }
     for entry in read_list("github-releases.list"):
         repo, _, hint = entry.partition(":")
@@ -241,6 +253,10 @@ def _install_neovim_release(config: Config, repo: str, _: str):
 
 def _install_nerd_font_release(config: Config, _: str, hint: str):
     _install_nerd_font(config, hint or "Hack")
+
+
+def _install_lnav_release(config: Config, _: str, __: str):
+    _install_lnav(config)
 
 
 def install_standalone(config: Config):
@@ -264,14 +280,14 @@ def install_uv_tools(config: Config):
     log.info("installing %d uv tools", len(tools))
     if config.dry_run:
         for t in tools:
-            if config.refresh_independent:
+            if config.should_refresh("uv-tools"):
                 log.info("uv tool install --upgrade %s", t)
             else:
                 log.info("uv tool install %s", t)
         return
     for tool in tools:
         cmd = ["uv", "tool", "install", tool]
-        if config.refresh_independent:
+        if config.should_refresh("uv-tools"):
             cmd.insert(3, "--upgrade")
         run(cmd)
 
@@ -283,7 +299,7 @@ def install_bun_globals(config: Config):
     log.info("installing %d bun global packages", len(packages))
     resolved_specs = (
         [_bun_global_spec(package) for package in packages]
-        if config.refresh_independent
+        if config.should_refresh("bun")
         else packages
     )
     if config.dry_run:
@@ -302,7 +318,7 @@ def _install_fzf(config: Config):
             log.info("git clone fzf + install --bin")
         return
     fzf_dir = config.home / ".fzf"
-    if config.refresh_independent:
+    if config.should_refresh("fzf"):
         if not _git_clone_or_pull(f"https://github.com/{FZF_REPO}.git", fzf_dir):
             return
     else:
@@ -321,7 +337,7 @@ def _install_fzf(config: Config):
         )
     run([str(fzf_dir / "install"), "--bin"])
     link = config.local_bin / "fzf"
-    if config.refresh_independent:
+    if config.should_refresh("fzf"):
         _remove_path(link)
         link.symlink_to(fzf_dir / "bin" / "fzf")
     elif not link.exists():
@@ -373,7 +389,7 @@ def _install_neovim(config: Config, repo: str):
         return
     install_dir = config.home / ".local" / "share" / "neovim"
     link = config.local_bin / "nvim"
-    if not config.refresh_independent and has("nvim"):
+    if not config.should_refresh("neovim") and has("nvim"):
         log.warning("nvim already installed")
         return
     release = get_latest_release(repo)
@@ -400,13 +416,41 @@ def _install_neovim(config: Config, repo: str):
     link.symlink_to(install_dir / "bin" / "nvim")
 
 
+def _install_lnav(config: Config):
+    log.info("installing lnav from GitHub releases")
+    if config.dry_run:
+        log.info("download latest lnav linux zip to ~/.local/bin")
+        return
+    if not config.should_refresh("lnav") and has("lnav"):
+        log.warning("lnav already installed")
+        return
+    raw_arch = platform.machine()
+    release = get_latest_release(LNAV_REPO)
+    if not release:
+        log.warning("could not fetch releases for %s", LNAV_REPO)
+        return
+    asset = _find_lnav_asset(release, raw_arch)
+    if not asset:
+        log.warning("could not find release asset for %s (linux-%s)", LNAV_REPO, raw_arch)
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        download_and_extract_zip(asset.browser_download_url, tmp)
+        for candidate in Path(tmp).rglob("lnav"):
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                dest = config.local_bin / "lnav"
+                shutil.copy2(candidate, dest)
+                dest.chmod(0o755)
+                return
+        log.warning("binary lnav not found in release archive")
+
+
 def _install_github_tarball(config: Config, repo: str):
     name = repo.split("/")[-1]
     log.info("installing %s from GitHub releases", name)
     if config.dry_run:
         log.info("download latest %s linux tarball to ~/.local/bin", name)
         return
-    if not config.refresh_independent and has(name):
+    if not config.should_refresh(name) and has(name):
         log.warning("%s already installed", name)
         return
     raw_arch = platform.machine()
@@ -443,14 +487,14 @@ def _neovim_linux_tarball_name(arch: str) -> str | None:
 def _install_oh_my_zsh(config: Config):
     log.info("installing oh-my-zsh")
     if config.dry_run:
-        if config.refresh_independent:
+        if config.should_refresh("oh-my-zsh"):
             log.info("git clone/update oh-my-zsh")
         else:
             log.info("curl ... ohmyzsh/install.sh | sh -- --unattended")
         return
     oh_my_zsh_dir = config.home / ".oh-my-zsh"
     if oh_my_zsh_dir.exists():
-        if not config.refresh_independent:
+        if not config.should_refresh("oh-my-zsh"):
             log.warning("oh-my-zsh already installed")
             return
         if not _git_clone_or_pull(
@@ -476,13 +520,13 @@ def _install_oh_my_zsh(config: Config):
 def _install_uv(config: Config):
     log.info("installing uv")
     if config.dry_run:
-        if config.refresh_independent:
+        if config.should_refresh("uv"):
             log.info("uv self update")
         else:
             log.info("curl -LsSf https://astral.sh/uv/install.sh | sh")
         return
     if has("uv"):
-        if not config.refresh_independent:
+        if not config.should_refresh("uv"):
             log.warning("uv already installed")
             return
         run(["uv", "self", "update"])
@@ -493,13 +537,13 @@ def _install_uv(config: Config):
 def _install_bun(config: Config):
     log.info("installing bun")
     if config.dry_run:
-        if config.refresh_independent:
+        if config.should_refresh("bun"):
             log.info("bun upgrade")
         else:
             log.info("curl -fsSL https://bun.sh/install | bash")
         return
     if has("bun"):
-        if not config.refresh_independent:
+        if not config.should_refresh("bun"):
             log.warning("bun already installed")
             return
         run(["bun", "upgrade"])
@@ -599,6 +643,16 @@ def _find_linux_tarball_asset(release: GitHubRelease, arch: str) -> GitHubAsset 
     return release.find_asset(pattern)
 
 
+def _find_lnav_asset(release: GitHubRelease, arch: str) -> GitHubAsset | None:
+    """Find a Linux lnav asset matching the given architecture."""
+    arch_variants = (
+        {"linux-musl-x86_64"} if arch == "x86_64" else {"linux-musl-arm64"}
+    )
+    arch_pattern = "|".join(re.escape(a) for a in arch_variants)
+    pattern = re.compile(rf"lnav-.*-({arch_pattern})\.zip$")
+    return release.find_asset(pattern)
+
+
 def download(url: str, dest: Path):
     """Download a URL to a local file."""
     with httpx.stream("GET", url, follow_redirects=True) as resp:
@@ -614,6 +668,19 @@ def download_and_extract_tar_gz(url: str, dest_dir: str):
         download(url, Path(tmp.name))
         with tarfile.open(tmp.name, mode="r:gz") as tf:
             tf.extractall(dest_dir)
+
+
+def download_and_extract_zip(url: str, dest_dir: str):
+    """Download and extract a .zip archive to dest_dir."""
+    with tempfile.NamedTemporaryFile(suffix=".zip") as tmp:
+        download(url, Path(tmp.name))
+        with zipfile.ZipFile(tmp.name, mode="r") as zf:
+            zf.extractall(dest_dir)
+            # Restore executable permissions for files with executable bit set in zip
+            for info in zf.infolist():
+                if info.external_attr >> 16 & 0o111:
+                    extracted = Path(dest_dir) / info.filename
+                    extracted.chmod(0o755)
 
 
 def _remove_path(path: Path):
@@ -677,8 +744,10 @@ def parse_args(argv: list[str] | None = None) -> Config:
     )
     parser.add_argument(
         "--refresh-independent",
-        action="store_true",
-        help="update independently installed tools to their latest managed version",
+        nargs="?",
+        const="",
+        metavar="PACKAGES",
+        help="update independently installed tools to their latest managed version; optionally specify comma-separated packages to refresh only those (no spaces in list)",
     )
     parser.add_argument(
         "-v",
@@ -693,10 +762,15 @@ def parse_args(argv: list[str] | None = None) -> Config:
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True, markup=True)],
     )
+    refresh_packages: set[str] = set()
+    if ns.refresh_independent is not None:
+        if ns.refresh_independent:
+            refresh_packages = set(ns.refresh_independent.split(","))
     return Config(
         no_desktop=ns.no_desktop,
         dry_run=ns.dry_run,
-        refresh_independent=ns.refresh_independent,
+        refresh_independent=ns.refresh_independent is not None,
+        refresh_packages=refresh_packages,
     )
 
 
