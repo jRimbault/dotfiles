@@ -45,16 +45,23 @@ exec poweralertd
 exec /usr/libexec/polkit-agent-helper-1
 
 ### Output configuration
-set $laptop_display eDP-1
-set $desk_display DP-1
+# Connected outputs:
+#   swaymsg -t get_outputs
+# Stable output identifiers:
+#   swaymsg -t get_outputs | jq -r '.[] | select(.active) | [.name, .make, .model, .serial] | @tsv'
+set $laptop_display Unknown 0x0057 0x00000000
+set $desk_display_1 Dell Inc. DELL P2423DE 601WNR3
+set $desk_display_2 Dell Inc. DELL U2417H 5K9YD74LDZ6L
 
 output * background $bg fill
 
-output $laptop_display { mode 1920x1080@59.999Hz; position 320 1440 }
-output $desk_display { mode 2560x1440@60Hz; position 0 0 }
+output "$laptop_display" mode 1920x1080@59.999Hz pos 0 0
+output "$desk_display_1" mode 2560x1440@60Hz pos 1920 0
+output "$desk_display_2" mode 1920x1080@60Hz pos 4480 0
 
 ### Idle configuration
 set $lock xkcd_lock
+set $blur_lock /home/jrimbault/.bin/blur-lock
 # timeout 1600 '$lock --daemonize'
 # timeout 3600 'systemctl suspend'
 exec swayidle -w \
@@ -124,12 +131,13 @@ bindsym --locked XF86MonBrightnessDown exec brightnessctl s 5%-
 bindsym $mod+Ctrl+Shift+b exec battery-notify.py --notify
 
 # Exit mode
-set $exit_mode exit: [l]ogout, [r]eboot, [s]leep, [p]oweroff
+set $exit_mode exit: [l]ogout, [r]eboot, [s]leep, [p]oweroff, [b]lur-lock
 mode '$exit_mode' {
     bindsym l exec 'swaymsg exit'
     bindsym r exec 'systemctl reboot'
     bindsym s exec 'systemctl suspend'; mode default
     bindsym p exec 'systemctl poweroff'
+    bindsym b exec $blur_lock; mode default
     bindsym Escape mode default
     bindsym Return mode default
 }
@@ -154,17 +162,29 @@ bindsym $mod+Shift+Right move right
 #
 # Workspaces:
 #
-workspace 1 output $laptop_display
-workspace 2 output $laptop_display
-workspace 3 output $laptop_display
-workspace 4 output $laptop_display
-workspace 5 output $laptop_display
-workspace 6 output $laptop_display
-workspace 7 output $laptop_display
-workspace 8 output $desk_display
-workspace 9 output $desk_display
-workspace 10 output $desk_display
-workspace 11 output $laptop_display
+workspace 1 output "$laptop_display"
+workspace 2 output "$laptop_display"
+workspace 3 output "$laptop_display"
+workspace 4 output "$laptop_display"
+workspace 5 output "$laptop_display"
+workspace 6 output "$laptop_display"
+workspace 7 output "$laptop_display"
+workspace 8 output "$desk_display_1"
+workspace 9 output "$desk_display_1"
+workspace 10 output "$desk_display_1"
+workspace 11 output "$desk_display_2"
+workspace 12 output "$desk_display_2"
+
+set $workspace_more_mode ws: [1]=11 [2]=12
+mode '$workspace_more_mode' {
+    bindsym $1 workspace number 11; mode default
+    bindsym $2 workspace number 12; mode default
+    bindsym Shift+$1 move container to workspace number 11; mode default
+    bindsym Shift+$2 move container to workspace number 12; mode default
+
+    bindsym Return mode default
+    bindsym Escape mode default
+}
 
 # Switch to workspace
 bindsym $mod+$1 workspace number 1
@@ -177,7 +197,7 @@ bindsym $mod+$7 workspace number 7; layout tabbed
 bindsym $mod+$8 workspace number 8
 bindsym $mod+$9 workspace number 9
 bindsym $mod+$0 workspace number 10
-bindsym $mod+Control+u workspace number 11
+bindsym $mod+Control+$0 mode '$workspace_more_mode'
 # Move focused container to workspace
 bindsym $mod+Shift+$1 move container to workspace number 1
 bindsym $mod+Shift+$2 move container to workspace number 2
@@ -189,7 +209,6 @@ bindsym $mod+Shift+$7 move container to workspace number 7
 bindsym $mod+Shift+$8 move container to workspace number 8
 bindsym $mod+Shift+$9 move container to workspace number 9
 bindsym $mod+Shift+$0 move container to workspace number 10
-bindsym $mod+Shift+u move container to workspace number 11
 # Note: workspaces can have any name you want, not just numbers.
 # We just use 1-10 as the default.
 bindsym $mod+Control+Shift+Right move workspace to output right
@@ -248,7 +267,7 @@ bindsym $mod+twosuperior scratchpad show
 #
 # Resizing containers:
 #
-set $resize_mode resize
+set $resize_mode resize: arrows=size, i/o=inner/outer gaps (+Shift to shrink)
 mode '$resize_mode' {
     # left will shrink the containers width
     # right will grow the containers width
@@ -260,6 +279,12 @@ mode '$resize_mode' {
     bindsym Down resize grow height 10px
     bindsym Up resize shrink height 10px
     bindsym Right resize grow width 10px
+
+    # Gaps: i/o grow inner/outer, Shift+i/Shift+o shrink (5px steps)
+    bindsym i gaps inner all plus 5
+    bindsym Shift+i gaps inner all minus 5
+    bindsym o gaps outer all plus 5
+    bindsym Shift+o gaps outer all minus 5
 
     # Return to default mode
     bindsym Return mode default
@@ -323,4 +348,3 @@ for_window [app_id = "gnome-calculator"] floating enable
 gaps outer 0
 gaps inner 5
 smart_gaps on
-
