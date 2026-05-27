@@ -1,0 +1,559 @@
+#!/usr/bin/env python3
+"""Save and restore alacritty window layouts on sway workspaces 8 through 12.
+
+How it works
+------------
+save      Walk the sway tree and write one snapshot per workspace
+          (workspace name, top-level layout, alacritty leaf count) under
+          $XDG_STATE_HOME/sway-layout/<profile>/workspace_<N>.json.
+restore   For each saved workspace, switch to it, spawn the saved number
+          of alacritty windows, then apply the workspace's top-level
+          layout (splith/splitv/tabbed/stacked).
+list      Print saved profiles.
+
+Why no `append_layout`
+----------------------
+Sway never implemented i3's `append_layout` (issue swaywm/sway#1005), so
+placeholder-based restore isn't possible. Restore instead spawns windows
+and reshapes the workspace by issuing sway commands.
+
+Limitations
+-----------
+- Only alacritty windows are counted (matched on app_id = "Alacritty").
+- Only the workspace's top-level layout is restored. Nested splits inside
+  the workspace are NOT recreated (they flatten to one layout).
+- Floating windows, scratchpad, marks, per-window sizes, and per-window
+  content (cwd, running command) are NOT restored.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Final, Literal
+
+LOG = logging.getLogger(Path(__file__).stem)
+
+ALACRITTY_APP_ID: Final = "Alacritty"
+TARGET_WORKSPACES: Final = frozenset(str(n) for n in range(8, 13))
+STATE_DIR: Final = (
+    Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    / "sway-layout"
+)
+
+# Small settle delays. append_layout is synchronous via swaymsg's reply, but
+# the X/Wayland mapping that follows alacritty launches is not — windows are
+# swallowed in arrival order, so we pace launches and poll the tree before
+# moving on to the next workspace.
+LAUNCH_GAP_SECONDS: Final = 0.15
+WAIT_FOR_MAP_TIMEOUT: Final = 15.0
+WAIT_FOR_MAP_POLL: Final = 0.1
+
+
+# ----- CLI types ---------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CliArgs:
+    command: Literal["save", "restore", "list"]
+    profile: str
+    force: bool
+    verbosity: int
+
+
+# ----- subcommands -------------------------------------------------------
+
+
+VALID_LAYOUTS: Final = frozenset({"splith", "splitv", "tabbed", "stacked"})
+SNAPSHOT_VERSION: Final = 2
+
+
+def cmd_save(profile_dir: Path) -> int:
+    tree = sway_get_tree()
+    workspaces = collect_target_workspaces(tree)
+    if not workspaces:
+        LOG.warning("no workspaces in range %s found", sorted(TARGET_WORKSPACES))
+        return 0
+
+    if profile_dir.exists():
+        shutil.rmtree(profile_dir)
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
+    saved = 0
+    for ws in workspaces:
+        snap = build_snapshot(ws)
+        if snap is None:
+            LOG.info("workspace %s has no alacritty windows, skipping", ws["name"])
+            continue
+        out = profile_dir / f"workspace_{snap['workspace']}.json"
+        out.write_text(json.dumps(snap, indent=2) + "\n")
+        LOG.info(
+            "saved workspace %s (%d alacritty)",
+            snap["workspace"],
+            count_tree_leaves(snap["tree"]),
+        )
+        saved += 1
+
+    if saved == 0:
+        LOG.warning("no alacritty windows found on target workspaces")
+    return 0
+
+
+def cmd_restore(profile_dir: Path, *, force: bool) -> int:
+    if not profile_dir.exists():
+        LOG.error("no saved layout at %s", profile_dir)
+        return 1
+    files = sorted(profile_dir.glob("workspace_*.json"))
+    if not files:
+        LOG.error("no workspace files in %s", profile_dir)
+        return 1
+
+    snapshots = [load_snapshot(f) for f in files]
+
+    tree = sway_get_tree()
+    existing = {
+        str(ws["name"]): count_alacritty(ws) for ws in collect_target_workspaces(tree)
+    }
+    # Refuse to add windows to a workspace that already has alacritty unless
+    # --force is given — the new windows would land in unpredictable spots
+    # relative to the existing ones and break the restored tree.
+    for snap in snapshots:
+        name = snap["workspace"]
+        if existing.get(name, 0) > 0 and not force:
+            LOG.error(
+                "workspace %s already has %d alacritty window(s); "
+                "pass --force to restore anyway",
+                name,
+                existing[name],
+            )
+            return 1
+
+    for snap in snapshots:
+        name: str = snap["workspace"]
+        tree_node = snap["tree"]
+        baseline = existing.get(name, 0)
+        leaves = count_tree_leaves(tree_node)
+
+        LOG.info("restoring workspace %s (%d window(s))", name, leaves)
+        swaymsg("workspace", name)
+
+        restorer = Restorer(workspace=name, baseline=baseline)
+        try:
+            restorer.build(tree_node, is_top=True)
+            restorer.apply_sizes(tree_node)
+        except RestoreError as exc:
+            LOG.error("workspace %s: %s", name, exc)
+            # keep going to subsequent workspaces — partial restore is more
+            # useful than nothing
+    return 0
+
+
+def load_snapshot(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or "tree" not in data:
+        raise ValueError(
+            f"{path} is not a v{SNAPSHOT_VERSION} snapshot — re-run `save` to regenerate"
+        )
+    return data
+
+
+def cmd_list() -> int:
+    if not STATE_DIR.exists():
+        print("no profiles saved")
+        return 0
+    profiles = sorted(p for p in STATE_DIR.iterdir() if p.is_dir())
+    if not profiles:
+        print("no profiles saved")
+        return 0
+    for p in profiles:
+        parts = []
+        for f in sorted(p.glob("workspace_*.json")):
+            name = workspace_name_from_file(f)
+            try:
+                snap = json.loads(f.read_text())
+                count = count_tree_leaves(snap["tree"])
+                parts.append(f"{name}({count})")
+            except (json.JSONDecodeError, KeyError, TypeError):
+                parts.append(f"{name}(?)")
+        print(f"{p.name}\t{', '.join(parts) or '(empty)'}")
+    return 0
+
+
+# ----- sway tree handling -------------------------------------------------
+
+
+def sway_get_tree() -> dict[str, Any]:
+    raw = subprocess.run(
+        ["swaymsg", "-t", "get_tree", "--raw"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return json.loads(raw)
+
+
+def collect_target_workspaces(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+
+    def walk(node: dict[str, Any]) -> None:
+        if node.get("type") == "workspace":
+            found.append(node)
+            return
+        for child in node.get("nodes", []):
+            walk(child)
+
+    walk(tree)
+    return [w for w in found if str(w["name"]) in TARGET_WORKSPACES]
+
+
+def is_alacritty_leaf(node: dict[str, Any]) -> bool:
+    return (
+        node.get("type") == "con"
+        and not node.get("nodes")
+        and node.get("app_id") == ALACRITTY_APP_ID
+    )
+
+
+def count_alacritty(node: dict[str, Any]) -> int:
+    if is_alacritty_leaf(node):
+        return 1
+    return sum(count_alacritty(c) for c in node.get("nodes", []))
+
+
+def build_snapshot(workspace: dict[str, Any]) -> dict[str, Any] | None:
+    tree = build_tree(workspace)
+    if tree is None:
+        return None
+    return {
+        "version": SNAPSHOT_VERSION,
+        "workspace": str(workspace["name"]),
+        "tree": tree,
+    }
+
+
+def build_tree(node: dict[str, Any]) -> dict[str, Any] | None:
+    """Distill the alacritty-only structure of a sway tree node.
+
+    Returns a nested {"type": "leaf", "percent": ...} or
+    {"type": "container", "layout": ..., "percent": ..., "children": [...]}.
+    Single-child containers collapse to keep the tree as flat as it visually
+    appears; when they do, the parent's percent overrides because that's the
+    slot the surviving child actually occupies in the grandparent.
+    """
+    if is_alacritty_leaf(node):
+        return {"type": "leaf", "percent": node.get("percent")}
+    if node.get("type") not in ("con", "workspace"):
+        return None
+    children = [
+        c for c in (build_tree(n) for n in node.get("nodes", [])) if c is not None
+    ]
+    if not children:
+        return None
+    if len(children) == 1:
+        only = dict(children[0])
+        # Parent's percent wins — the parent's slot is what the child now fills.
+        if node.get("percent") is not None:
+            only["percent"] = node["percent"]
+        return only
+    layout = node.get("layout", "splith")
+    if layout not in VALID_LAYOUTS:
+        layout = "splith"
+    return {
+        "type": "container",
+        "layout": layout,
+        "percent": node.get("percent"),
+        "children": children,
+    }
+
+
+def count_tree_leaves(tree: dict[str, Any]) -> int:
+    if tree["type"] == "leaf":
+        return 1
+    return sum(count_tree_leaves(c) for c in tree["children"])
+
+
+def depth_to_first_leaf(tree: dict[str, Any]) -> int:
+    """Number of `focus parent` calls to ascend from the first leaf of `tree`
+    back up to `tree` itself."""
+    if tree["type"] == "leaf":
+        return 0
+    return 1 + depth_to_first_leaf(tree["children"][0])
+
+
+class RestoreError(RuntimeError):
+    pass
+
+
+class Restorer:
+    """Rebuilds a saved layout tree on the currently-focused workspace.
+
+    Sway has no `append_layout`, so we have to build the tree by interleaving
+    `exec alacritty` with `mark`, `split`, `layout`, `focus`, and `move`
+    commands. The core trick: when the previous sibling at a given level is
+    a container (not a leaf), `exec` places the new window *inside* that
+    container; we recover by focusing the new subtree and issuing `move`
+    in the parent's primary axis once per level of excess depth — at the
+    container boundary `move` pops out into the parent.
+    """
+
+    def __init__(self, workspace: str, baseline: int) -> None:
+        self.workspace = workspace
+        self.spawned = 0
+        self.mark_counter = 0
+        # Sway counts existing alacritty too; we wait for absolute totals.
+        self.baseline = baseline
+
+    def next_mark(self) -> str:
+        self.mark_counter += 1
+        return f"swrestore_{os.getpid()}_{self.mark_counter}"
+
+    def spawn_leaf(self) -> str:
+        swaymsg("exec", "alacritty")
+        if not wait_for_alacritty(self.workspace, self.baseline + self.spawned + 1):
+            raise RestoreError(
+                f"timed out waiting for alacritty #{self.spawned + 1} to map"
+            )
+        self.spawned += 1
+        mark = self.next_mark()
+        swaymsg("mark", "--add", mark)
+        time.sleep(LAUNCH_GAP_SECONDS)
+        return mark
+
+    def focus_mark(self, mark: str) -> None:
+        swaymsg(f"[con_mark={mark}]", "focus")
+
+    def build(self, node: dict[str, Any], *, is_top: bool) -> str:
+        """Build `node`. Returns the mark of the first leaf in this subtree.
+
+        Mutates `node` to attach `_mark` (the mark of *some* leaf inside it,
+        always the first one in DFS order) so a second pass can locate and
+        resize each container without re-deriving marks.
+        """
+        if node["type"] == "leaf":
+            mark = self.spawn_leaf()
+            node["_mark"] = mark
+            return mark
+
+        children = node["children"]
+        my_layout = node["layout"]
+
+        # 1. Build first child fully. Its first leaf becomes our anchor.
+        first_mark = self.build(children[0], is_top=False)
+        node["_mark"] = first_mark
+
+        # 2. Configure this container's layout.
+        #    Navigate from the anchor leaf up to children[0]'s own container
+        #    (or the leaf itself if children[0] is a leaf); then either change
+        #    the workspace layout (top-level) or wrap children[0] in a new
+        #    container of our layout (non-top).
+        self.focus_mark(first_mark)
+        for _ in range(depth_to_first_leaf(children[0])):
+            swaymsg("focus", "parent")
+
+        if is_top:
+            swaymsg("layout", my_layout)
+        else:
+            # `split` only takes h/v; for tabbed/stacked we wrap with the
+            # closest split direction first and then set the final layout.
+            split_dir = "v" if my_layout in ("splitv", "stacked") else "h"
+            swaymsg("split", split_dir)
+            if my_layout in ("tabbed", "stacked"):
+                swaymsg("layout", my_layout)
+
+        # 3. Build remaining children. Each new spawn lands wherever sway
+        #    currently has focus; if the previous sibling was a container,
+        #    we have to pop the new subtree out by that container's depth.
+        move_dir = "down" if my_layout in ("splitv", "stacked") else "right"
+        for i, child in enumerate(children[1:]):
+            previous_sibling = children[i]
+            excess = depth_to_first_leaf(previous_sibling)
+
+            child_first_mark = self.build(child, is_top=False)
+
+            if excess > 0:
+                self.focus_mark(child_first_mark)
+                for _ in range(depth_to_first_leaf(child)):
+                    swaymsg("focus", "parent")
+                for _ in range(excess):
+                    swaymsg("move", move_dir)
+
+        return first_mark
+
+    def apply_sizes(self, node: dict[str, Any]) -> None:
+        """Walk the (already built) tree and resize each container's children
+        to match the saved percents.
+
+        Only splith/splitv have per-child sizing — tabbed/stacked children
+        always fill the whole container. We set every child but the last; the
+        last absorbs whatever sway has left, which keeps siblings summing to
+        100% even when our saved percents drift slightly.
+        """
+        if node["type"] == "leaf":
+            return
+
+        children = node["children"]
+        my_layout = node["layout"]
+
+        if my_layout in ("splith", "splitv") and len(children) > 1:
+            dim = "width" if my_layout == "splith" else "height"
+            for child in children[:-1]:
+                pct = child.get("percent")
+                if pct is None:
+                    continue
+                ppt = max(1, min(99, round(pct * 100)))
+                mark = child.get("_mark")
+                if mark is None:
+                    continue
+                self.focus_mark(mark)
+                for _ in range(depth_to_first_leaf(child)):
+                    swaymsg("focus", "parent")
+                swaymsg("resize", "set", dim, str(ppt), "ppt")
+
+        for child in children:
+            self.apply_sizes(child)
+
+
+def wait_for_alacritty(workspace_name: str, target_count: int) -> bool:
+    deadline = time.monotonic() + WAIT_FOR_MAP_TIMEOUT
+    while time.monotonic() < deadline:
+        tree = sway_get_tree()
+        for ws in collect_target_workspaces(tree):
+            if str(ws["name"]) == workspace_name:
+                if count_alacritty(ws) >= target_count:
+                    return True
+                break
+        time.sleep(WAIT_FOR_MAP_POLL)
+    return False
+
+
+# ----- shell helpers ------------------------------------------------------
+
+
+class SwaymsgError(RuntimeError):
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(f"swaymsg exit {code}: {message}")
+        self.code = code
+
+
+def swaymsg(*cmd: str) -> str:
+    # sway sends IPC error replies on swaymsg's stdout (not stderr), so we
+    # have to inspect both to surface a useful failure message.
+    LOG.debug("swaymsg %s", " ".join(cmd))
+    result = subprocess.run(
+        ["swaymsg", "--", *cmd],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        msg = (
+            (result.stdout or "").strip()
+            or (result.stderr or "").strip()
+            or "(no output from swaymsg)"
+        )
+        raise SwaymsgError(result.returncode, msg)
+    return result.stdout
+
+
+def workspace_name_from_file(path: Path) -> str:
+    return path.stem.removeprefix("workspace_")
+
+
+# ----- CLI ---------------------------------------------------------------
+
+
+def parse_args(argv: list[str]) -> CliArgs:
+    parser = argparse.ArgumentParser(
+        prog="sway-layout",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-p",
+        "--profile",
+        default="default",
+        help="profile name (default: %(default)s)",
+    )
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbosity",
+        action="count",
+        default=0,
+        help="increase log verbosity (repeatable)",
+    )
+    verbosity.add_argument(
+        "-q",
+        "--quiet",
+        dest="verbosity",
+        action="store_const",
+        const=-1,
+        help="suppress info logs",
+    )
+
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("save", help="save current alacritty layout")
+    p_restore = sub.add_parser("restore", help="restore saved alacritty layout")
+    p_restore.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="restore even if target workspaces already have alacritty windows",
+    )
+    sub.add_parser("list", help="list saved profiles")
+
+    ns = parser.parse_args(argv)
+    return CliArgs(
+        command=ns.command,
+        profile=ns.profile,
+        force=getattr(ns, "force", False),
+        verbosity=ns.verbosity,
+    )
+
+
+def setup_logging(verbosity: int) -> None:
+    level = {
+        -1: logging.WARNING,
+        0: logging.INFO,
+        1: logging.DEBUG,
+    }.get(verbosity, logging.DEBUG)
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    setup_logging(args.verbosity)
+    profile_dir = STATE_DIR / args.profile
+    try:
+        if args.command == "save":
+            return cmd_save(profile_dir)
+        if args.command == "restore":
+            return cmd_restore(profile_dir, force=args.force)
+        if args.command == "list":
+            return cmd_list()
+    except SwaymsgError as exc:
+        LOG.error("%s", exc)
+        return 1
+    except subprocess.CalledProcessError as exc:
+        LOG.error(
+            "subprocess failed (exit %s): %s",
+            exc.returncode,
+            (exc.stderr or "").strip(),
+        )
+        return 1
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
