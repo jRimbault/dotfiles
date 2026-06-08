@@ -355,10 +355,14 @@ vim.cmd("filetype plugin indent on")
 -- Automatically reload files changed outside of vim
 vim.opt.autoread = true
 
--- Trim trailing whitespace on save
+-- Trim trailing whitespace on save, preserving cursor position
 vim.api.nvim_create_autocmd("BufWritePre", {
     pattern = "*",
-    command = [[%s/\s\+$//e]]
+    callback = function()
+        local pos = vim.api.nvim_win_get_cursor(0)
+        vim.cmd([[%s/\s\+$//e]])
+        vim.api.nvim_win_set_cursor(0, pos)
+    end
 })
 
 -- Autocommands for specific file types and cases

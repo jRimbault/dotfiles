@@ -138,7 +138,7 @@ has()
 goto_project()
 {
   local dest base
-  base="$HOME/Documents"
+  base="${PROJECTS_DIR:-$HOME/Documents}"
   dest="$(find_projects "$base" | fzf --layout=reverse --height=20 --preview "git-preview.sh '$base/{1}'")"
   [ -z "$dest" ] && return 0
   cd "$base/$dest"
@@ -240,4 +240,22 @@ file-to-clipboard()
 color-palette-from-file()
 {
   convert "$1" +dither -colors 10 -unique-colors txt:-
+}
+
+git_commit_with_date()
+{
+  local offset="$1"
+  shift
+
+  local iso_date
+  local git_date
+
+  iso_date="$(date --iso-8601=seconds -d "$offset")" || return
+  git_date="$(date -d "$iso_date" '+%a %b %-d %H:%M:%S %Y %z')" || return
+
+  GIT_COMMITTER_DATE="$git_date" git "$@" --date="$iso_date"
+}
+
+seen() {
+    awk '!seen[$0]++' "$@"
 }

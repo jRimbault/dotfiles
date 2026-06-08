@@ -7,6 +7,8 @@ __pycache__/
 .vscode/
 .idea/
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 mailer.json
 .venv/
 *.code-workspace
@@ -18,3 +20,14 @@ AGENTS.md
 CLAUDE.md
 copilot-instructions.md
 .github/copilot-instructions.md
+.gitlab-ci-local-env
+fixture.conf.json
+artifacts
+.coverage
+.codex
+skill/
+.agents/
+.claude/
+.claude
+PLAN.md
+.pnr_copilot

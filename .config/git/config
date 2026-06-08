@@ -25,6 +25,8 @@
     log-oneline = log --graph --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset'
     lo = log-oneline
     lop = log-pretty
+    # log-oneline for a path, with all tag commits unioned in (release tags often touch only Cargo.toml)
+    lot = "!f() { path=\"$1\"; shift; { git log --pretty='%ct %H' -- \"$path\"; git for-each-ref --format='%(creatordate:unix) %(*objectname)' refs/tags | awk 'NF==2'; } | sort -k1,1nr -u | awk '{print $2}' | git log --no-walk=sorted --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset' --stdin \"$@\"; }; f"
     branches-sorted = branch -v --color=always --sort=-committerdate
     diff-last = diff HEAD~1
     current = rev-parse HEAD
@@ -44,6 +46,13 @@
     w = commit -v --allow-empty
     wa = commit -v --amend --allow-empty
 
+    who = shortlog -sn --no-merges HEAD
+    dmg = log --oneline -i -E --grep='(incident|outage|downtime|rollback|revert|mitigate|mitigation|hotfix|broke|prod)' --since='1 year ago'
+    bugs = log --oneline -i -E --grep='(bug|bugfix|fix|fixed|fixes|defect|regression|hotfix|broke)' --since='1 year ago'
+    bugfiles = !git log --name-only --format='' -i -E --grep='(bug|bugfix|fix|fixed|fixes|defect|regression|hotfix|broke)' --since='1 year ago' | sort | uniq -c | sort -nr
+    monthly = !git log --since='1 year ago' --format='%ad' --date=format:'%Y-%m' | sort | uniq -c
+    churn = !git log --format='' --name-only --diff-filter=AM --since='1 year ago' | sort | uniq -c | sort -nr | head -20
+
 [merge]
     conflictstyle = diff3
 
@@ -52,13 +61,13 @@
 
 [push]
     followTags = true
-	autoSetupRemote = true
-	default = current
+    autoSetupRemote = true
+    default = current
 
 [init]
     defaultBranch = main
 
 [difftool "gumtree-docker"]
-	cmd = docker run -v $LOCAL:/diff/left -v $REMOTE:/diff/right -p 4567:4567 gumtreediff/gumtree webdiff left/ right/
+    cmd = docker run -v $LOCAL:/diff/left -v $REMOTE:/diff/right -p 4567:4567 gumtreediff/gumtree webdiff left/ right/
 [maintenance]
-	repo = /home/nobackup/Documents/gitlab.lan.provenrun.com/RnD/Tools/board-booker
+    repo = /home/nobackup/Documents/gitlab.lan.provenrun.com/RnD/Tools/board-booker

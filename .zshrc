@@ -11,7 +11,7 @@ export ZSH="$HOME/.oh-my-zsh"
 ZSH_CUSTOM="$HOME/.config/shell"
 ZSH_THEME="symbols"
 
-plugins=()
+plugins=(rust)
 
 source "$ZSH/oh-my-zsh.sh"
 declare -ra libs=(
@@ -40,4 +40,5 @@ test -f ~/.profile && . ~/.profile
 
 # Source completions after .profile sets up PATH (e.g. ~/.cargo/bin)
 test -f "$ZSH_CUSTOM/completions" && source "$ZSH_CUSTOM/completions"
+
 

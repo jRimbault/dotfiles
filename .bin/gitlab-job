@@ -20,7 +20,7 @@ def main():
     jobs = available_jobs()
     job = next((a for a in argv if a in jobs), None) or fzf_ask_job(jobs)
     flags = [a for a in argv if a != job]
-    subprocess.run(["gitlab-ci-local"] + flags + [job])
+    subprocess.run(["gitlab-ci-local", "--ignore-predefined-vars", "CI_REGISTRY_IMAGE"] + flags + [job])
 
 
 def fzf_ask_job(jobs: set[str]):
@@ -44,7 +44,7 @@ def fzf_ask_job(jobs: set[str]):
 
 def available_jobs() -> set[str]:
     with subprocess.Popen(
-        ["gitlab-ci-local", "--list-json"],
+        ["gitlab-ci-local", "--ignore-predefined-vars", "CI_REGISTRY_IMAGE", "--list-json"],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
     ) as child:

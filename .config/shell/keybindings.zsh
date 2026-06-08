@@ -31,11 +31,22 @@ bindkey ^s _zsh_goto_project
 # short git log
 _zsh_git_log_short()
 {
+    echo
     git_log_pager_short
     zle reset-prompt
 }
 zle -N _zsh_git_log_short
 bindkey ^k _zsh_git_log_short
+
+# short git log
+_zsh_git_status_short()
+{
+    echo
+    git status --short
+    zle reset-prompt
+}
+zle -N _zsh_git_status_short
+bindkey ^j _zsh_git_status_short
 
 # history fuzzy finder
 _history_fuzzy_finder()
