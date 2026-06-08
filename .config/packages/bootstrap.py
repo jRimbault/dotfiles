@@ -6,8 +6,10 @@
 # ///
 """Bootstrap a fresh Ubuntu/Debian system with required packages.
 
-Reads .list files from the same directory as this script and installs
-packages using the appropriate method for each list.
+Most dev tools are declared in ../mise/config.toml and installed by mise. This
+script handles the pieces mise cannot: apt system packages, the rustup toolchain
+(with the rust-analyzer component), oh-my-zsh, and the Hack Nerd Font. apt
+package lists live in .list files next to this script.
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import platform
 import re
 import shlex
 import shutil
@@ -24,7 +25,6 @@ import sys
 import tarfile
 import tempfile
 import typing
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -33,18 +33,17 @@ from pydantic import BaseModel  # ty: ignore[unresolved-import]
 from rich.logging import RichHandler  # ty: ignore[unresolved-import]
 
 type Installer = typing.Callable[[Config], None]
-type GitHubReleaseInstaller = typing.Callable[[Config, str, str], None]
 
 log = logging.getLogger(Path(__file__).stem)
 
 PACKAGES_DIR = Path(__file__).resolve().parent
+MISE_CONFIG = PACKAGES_DIR.parent / "mise" / "config.toml"
 
 GITHUB_API_BASE = "https://api.github.com"
-FZF_REPO = "junegunn/fzf"
-NEOVIM_RELEASE_REPO = "neovim/neovim-releases"
 NERD_FONTS_REPO = "ryanoasis/nerd-fonts"
+NERD_FONT = "Hack"
 OH_MY_ZSH_REPO = "ohmyzsh/ohmyzsh"
-LNAV_REPO = "tstack/lnav"
+MISE_INSTALL_URL = "https://mise.run"
 APT_NO_RECOMMENDS_SUFFIX = "[no-recommends]"
 NO_DESKTOP_APT_LIST = "apt-no-desktop.list"
 
@@ -76,8 +75,8 @@ class AptPackage:
 class Config:
     no_desktop: bool = False
     dry_run: bool = False
-    refresh_independent: bool = False
-    refresh_packages: set[str] = field(default_factory=set)
+    refresh: bool = False
+    refresh_tools: list[str] = field(default_factory=list)
     home: Path = field(default_factory=Path.home)
 
     @property
@@ -89,39 +88,30 @@ class Config:
         return self.home / ".cargo" / "bin"
 
     @property
-    def bun_bin(self) -> Path:
-        return self.home / ".bun" / "bin"
-
-    def should_refresh(self, package: str) -> bool:
-        """Check if a package should be refreshed based on refresh_packages filter."""
-        if not self.refresh_independent:
-            return False
-        if not self.refresh_packages:
-            return True
-        return package in self.refresh_packages
+    def mise_shims(self) -> Path:
+        return self.home / ".local" / "share" / "mise" / "shims"
 
 
 def main(config: Config) -> int:
     config.local_bin.mkdir(parents=True, exist_ok=True)
-    extend_path(config.local_bin, config.cargo_bin, config.bun_bin)
+    extend_path(config.local_bin, config.cargo_bin, config.mise_shims)
 
-    # When refreshing independent tools, skip system package managers
-    if config.refresh_independent:
+    # On refresh we only update independently managed tools (mise, rustup,
+    # oh-my-zsh, fonts) and skip the system package manager.
+    if config.refresh:
         steps: list[tuple[str, Installer]] = [
-            ("GitHub releases", install_github_releases),
-            ("standalone tools", install_standalone),
-            ("uv tools", install_uv_tools),
-            ("bun global packages", install_bun_globals),
+            ("rustup", install_rustup),
+            ("mise tools", install_mise),
+            ("oh-my-zsh", install_oh_my_zsh),
+            ("Nerd Font", install_nerd_font),
         ]
     else:
-        steps: list[tuple[str, Installer]] = [
+        steps = [
             ("apt packages", install_apt),
             ("rustup", install_rustup),
-            ("cargo-binstall crates", install_cargo_binstall),
-            ("GitHub releases", install_github_releases),
-            ("standalone tools", install_standalone),
-            ("uv tools", install_uv_tools),
-            ("bun global packages", install_bun_globals),
+            ("mise tools", install_mise),
+            ("oh-my-zsh", install_oh_my_zsh),
+            ("Nerd Font", install_nerd_font),
         ]
     failures: list[str] = []
     for label, step in steps:
@@ -205,307 +195,42 @@ def install_rustup(config: Config):
         run(["rustup", "component", "add", component])
 
 
-def install_cargo_binstall(config: Config):
-    packages = read_list("cargo-binstall.list")
-    if not packages:
-        return
-    log.info("installing cargo-binstall + %d crates", len(packages))
-    if config.dry_run:
-        for p in packages:
-            if config.should_refresh("cargo-binstall"):
-                log.info("cargo binstall --no-confirm --force %s", p)
-            else:
-                log.info("cargo binstall --no-confirm %s", p)
-        return
-    if not has("cargo-binstall"):
-        run_piped(
-            [
-                "curl",
-                "-L",
-                "--proto",
-                "=https",
-                "--tlsv1.2",
-                "-sSf",
-                "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh",
-            ],
-            stdin_to=["bash"],
-        )
-    cmd = ["cargo", "binstall", "--no-confirm", *packages]
-    if config.should_refresh("cargo-binstall"):
-        cmd.insert(3, "--force")
-    run(cmd)
+def install_mise(config: Config):
+    """Install mise if missing, then install or upgrade the tools it manages.
 
-
-def install_github_releases(config: Config):
-    special_installers: dict[str, GitHubReleaseInstaller] = {
-        FZF_REPO: _install_fzf_release,
-        NEOVIM_RELEASE_REPO: _install_neovim_release,
-        NERD_FONTS_REPO: _install_nerd_font_release,
-        LNAV_REPO: _install_lnav_release,
-    }
-    for entry in read_list("github-releases.list"):
-        repo, _, hint = entry.partition(":")
-        installer = special_installers.get(repo)
-        if installer is None:
-            _install_github_tarball(config, repo)
-            continue
-        installer(config, repo, hint)
-
-
-def _install_fzf_release(config: Config, _: str, __: str):
-    _install_fzf(config)
-
-
-def _install_neovim_release(config: Config, repo: str, _: str):
-    _install_neovim(config, repo)
-
-
-def _install_nerd_font_release(config: Config, _: str, hint: str):
-    _install_nerd_font(config, hint or "Hack")
-
-
-def _install_lnav_release(config: Config, _: str, __: str):
-    _install_lnav(config)
-
-
-def install_standalone(config: Config):
-    handlers: dict[str, typing.Callable[[Config], None]] = {
-        "oh-my-zsh": _install_oh_my_zsh,
-        "uv": _install_uv,
-        "bun": _install_bun,
-    }
-    for tool in read_list("standalone.list"):
-        handler = handlers.get(tool)
-        if handler:
-            handler(config)
-        else:
-            log.warning("unknown standalone tool: %s", tool)
-
-
-def install_uv_tools(config: Config):
-    tools = read_list("uv-tools.list")
-    if not tools:
-        return
-    log.info("installing %d uv tools", len(tools))
-    if config.dry_run:
-        for t in tools:
-            if config.should_refresh("uv-tools"):
-                log.info("uv tool install --upgrade %s", t)
-            else:
-                log.info("uv tool install %s", t)
-        return
-    for tool in tools:
-        cmd = ["uv", "tool", "install", tool]
-        if config.should_refresh("uv-tools"):
-            cmd.insert(3, "--upgrade")
-        run(cmd)
-
-
-def install_bun_globals(config: Config):
-    packages = read_list("bun-global.list")
-    if not packages:
-        return
-    log.info("installing %d bun global packages", len(packages))
-    resolved_specs = (
-        [_bun_global_spec(package) for package in packages]
-        if config.should_refresh("bun")
-        else packages
-    )
-    if config.dry_run:
-        for spec in resolved_specs:
-            log.info("bun install -g %s", spec)
-        return
-    run(["bun", "install", "-g", *resolved_specs])
-
-
-def _install_fzf(config: Config):
-    log.info("installing fzf from GitHub")
-    if config.dry_run:
-        if config.refresh_independent:
-            log.info("git clone/update fzf + install --bin")
-        else:
-            log.info("git clone fzf + install --bin")
-        return
-    fzf_dir = config.home / ".fzf"
-    if config.should_refresh("fzf"):
-        if not _git_clone_or_pull(f"https://github.com/{FZF_REPO}.git", fzf_dir):
-            return
+    mise is pointed at the dotfiles copy of the config via MISE_GLOBAL_CONFIG_FILE
+    so it works whether or not the dotfiles are already checked out into $HOME.
+    """
+    if config.refresh:
+        targets = ", ".join(config.refresh_tools) if config.refresh_tools else "all"
+        log.info("upgrading mise tools (%s)", targets)
+        mise_cmd = ["mise", "upgrade", *config.refresh_tools]
     else:
-        if fzf_dir.exists() or has("fzf"):
-            log.warning("fzf already installed")
-            return
-        run(
-            [
-                "git",
-                "clone",
-                "--depth",
-                "1",
-                f"https://github.com/{FZF_REPO}.git",
-                str(fzf_dir),
-            ]
-        )
-    run([str(fzf_dir / "install"), "--bin"])
-    link = config.local_bin / "fzf"
-    if config.should_refresh("fzf"):
-        _remove_path(link)
-        link.symlink_to(fzf_dir / "bin" / "fzf")
-    elif not link.exists():
-        link.symlink_to(fzf_dir / "bin" / "fzf")
-
-
-def _install_nerd_font(config: Config, font_name: str):
-    log.info("installing Nerd Font: %s", font_name)
+        log.info("installing mise tools from %s", MISE_CONFIG)
+        mise_cmd = ["mise", "install"]
     if config.dry_run:
-        log.info("download %s.tar.xz to ~/.local/share/fonts", font_name)
+        if not has("mise"):
+            log.info("curl %s | sh", MISE_INSTALL_URL)
+        log.info("MISE_GLOBAL_CONFIG_FILE=%s %s", MISE_CONFIG, shlex.join(mise_cmd))
         return
-    font_dir = config.home / ".local" / "share" / "fonts"
-    font_dir.mkdir(parents=True, exist_ok=True)
-    release = get_latest_release(NERD_FONTS_REPO)
-    if not release:
-        log.warning("could not fetch Nerd Font releases")
-        return
-    pattern = re.compile(rf"{re.escape(font_name)}\.tar\.(xz|gz)$")
-    asset = release.find_asset(pattern)
-    if not asset:
-        log.warning("could not find Nerd Font release for %s", font_name)
-        return
-    log.info("downloading %s", asset.browser_download_url)
-    with tempfile.TemporaryDirectory() as tmp:
-        archive = Path(tmp) / "font.tar.xz"
-        download(asset.browser_download_url, archive)
-        with tarfile.open(archive) as tf:
-            tf.extractall(tmp)
-        for font_file in Path(tmp).glob("*.[to]tf"):
-            shutil.copy2(font_file, font_dir)
-    if has("fc-cache"):
-        run(["fc-cache", "-f", str(font_dir)])
+    if not has("mise"):
+        run_piped(["curl", MISE_INSTALL_URL], stdin_to=["sh"])
+        extend_path(config.local_bin, config.mise_shims)
+    env = {**os.environ, "MISE_GLOBAL_CONFIG_FILE": str(MISE_CONFIG)}
+    run(mise_cmd, env=env)
 
 
-def _install_neovim(config: Config, repo: str):
-    log.info("installing Neovim from GitHub releases")
-    asset_name = _neovim_linux_tarball_name(platform.machine())
-    if not asset_name:
-        log.warning(
-            "unsupported architecture for Neovim release installs: %s",
-            platform.machine(),
-        )
-        return
-    if config.dry_run:
-        log.info(
-            "download %s to ~/.local/share/neovim and link ~/.local/bin/nvim",
-            asset_name,
-        )
-        return
-    install_dir = config.home / ".local" / "share" / "neovim"
-    link = config.local_bin / "nvim"
-    if not config.should_refresh("neovim") and has("nvim"):
-        log.warning("nvim already installed")
-        return
-    release = get_latest_release(repo)
-    if not release:
-        log.warning("could not fetch releases for %s", repo)
-        return
-    asset = release.find_asset(re.compile(rf"^{re.escape(asset_name)}$"))
-    if not asset:
-        log.warning("could not find Neovim release asset: %s", asset_name)
-        return
-    with tempfile.TemporaryDirectory() as tmp:
-        download_and_extract_tar_gz(asset.browser_download_url, tmp)
-        extracted_dir = next(
-            (path for path in Path(tmp).iterdir() if (path / "bin" / "nvim").exists()),
-            None,
-        )
-        if not extracted_dir:
-            log.warning("Neovim release archive did not contain bin/nvim")
-            return
-        install_dir.parent.mkdir(parents=True, exist_ok=True)
-        _remove_path(install_dir)
-        shutil.copytree(extracted_dir, install_dir, symlinks=True)
-    _remove_path(link)
-    link.symlink_to(install_dir / "bin" / "nvim")
-
-
-def _install_lnav(config: Config):
-    log.info("installing lnav from GitHub releases")
-    if config.dry_run:
-        log.info("download latest lnav linux zip to ~/.local/bin")
-        return
-    if not config.should_refresh("lnav") and has("lnav"):
-        log.warning("lnav already installed")
-        return
-    raw_arch = platform.machine()
-    release = get_latest_release(LNAV_REPO)
-    if not release:
-        log.warning("could not fetch releases for %s", LNAV_REPO)
-        return
-    asset = _find_lnav_asset(release, raw_arch)
-    if not asset:
-        log.warning(
-            "could not find release asset for %s (linux-%s)", LNAV_REPO, raw_arch
-        )
-        return
-    with tempfile.TemporaryDirectory() as tmp:
-        download_and_extract_zip(asset.browser_download_url, tmp)
-        for candidate in Path(tmp).rglob("lnav"):
-            if candidate.is_file() and os.access(candidate, os.X_OK):
-                dest = config.local_bin / "lnav"
-                shutil.copy2(candidate, dest)
-                dest.chmod(0o755)
-                return
-        log.warning("binary lnav not found in release archive")
-
-
-def _install_github_tarball(config: Config, repo: str):
-    name = repo.split("/")[-1]
-    log.info("installing %s from GitHub releases", name)
-    if config.dry_run:
-        log.info("download latest %s linux tarball to ~/.local/bin", name)
-        return
-    if not config.should_refresh(name) and has(name):
-        log.warning("%s already installed", name)
-        return
-    raw_arch = platform.machine()
-    release = get_latest_release(repo)
-    if not release:
-        log.warning("could not fetch releases for %s", repo)
-        return
-    asset = _find_linux_tarball_asset(release, raw_arch)
-    if not asset:
-        log.warning("could not find release asset for %s (linux-%s)", repo, raw_arch)
-        return
-    with tempfile.TemporaryDirectory() as tmp:
-        download_and_extract_tar_gz(asset.browser_download_url, tmp)
-        for candidate in Path(tmp).rglob(name):
-            if candidate.is_file() and os.access(candidate, os.X_OK):
-                dest = config.local_bin / name
-                shutil.copy2(candidate, dest)
-                dest.chmod(0o755)
-                return
-        log.warning("binary %s not found in release archive", name)
-
-
-def _neovim_linux_tarball_name(arch: str) -> str | None:
-    match arch:
-        case "x86_64":
-            release_arch = "x86_64"
-        case "aarch64" | "arm64":
-            release_arch = "arm64"
-        case _:
-            return None
-    return f"nvim-linux-{release_arch}.tar.gz"
-
-
-def _install_oh_my_zsh(config: Config):
+def install_oh_my_zsh(config: Config):
     log.info("installing oh-my-zsh")
     if config.dry_run:
-        if config.should_refresh("oh-my-zsh"):
+        if config.refresh:
             log.info("git clone/update oh-my-zsh")
         else:
             log.info("curl ... ohmyzsh/install.sh | sh -- --unattended")
         return
     oh_my_zsh_dir = config.home / ".oh-my-zsh"
     if oh_my_zsh_dir.exists():
-        if not config.should_refresh("oh-my-zsh"):
+        if not config.refresh:
             log.warning("oh-my-zsh already installed")
             return
         if not _git_clone_or_pull(
@@ -528,42 +253,32 @@ def _install_oh_my_zsh(config: Config):
     )
 
 
-def _install_uv(config: Config):
-    log.info("installing uv")
+def install_nerd_font(config: Config):
+    log.info("installing Nerd Font: %s", NERD_FONT)
     if config.dry_run:
-        if config.should_refresh("uv"):
-            log.info("uv self update")
-        else:
-            log.info("curl -LsSf https://astral.sh/uv/install.sh | sh")
+        log.info("download %s.tar.xz to ~/.local/share/fonts", NERD_FONT)
         return
-    if has("uv"):
-        if not config.should_refresh("uv"):
-            log.warning("uv already installed")
-            return
-        run(["uv", "self", "update"])
-    else:
-        run_piped(["curl", "-LsSf", "https://astral.sh/uv/install.sh"], stdin_to=["sh"])
-
-
-def _install_bun(config: Config):
-    log.info("installing bun")
-    if config.dry_run:
-        if config.should_refresh("bun"):
-            log.info("bun upgrade")
-        else:
-            log.info("curl -fsSL https://bun.sh/install | bash")
+    font_dir = config.home / ".local" / "share" / "fonts"
+    font_dir.mkdir(parents=True, exist_ok=True)
+    release = get_latest_release(NERD_FONTS_REPO)
+    if not release:
+        log.warning("could not fetch Nerd Font releases")
         return
-    if has("bun"):
-        if not config.should_refresh("bun"):
-            log.warning("bun already installed")
-            return
-        run(["bun", "upgrade"])
-    else:
-        run_piped(["curl", "-fsSL", "https://bun.sh/install"], stdin_to=["bash"])
-    extend_path(config.bun_bin)
-    node_link = config.bun_bin / "node"
-    if not node_link.exists():
-        node_link.symlink_to(config.bun_bin / "bun")
+    pattern = re.compile(rf"{re.escape(NERD_FONT)}\.tar\.(xz|gz)$")
+    asset = release.find_asset(pattern)
+    if not asset:
+        log.warning("could not find Nerd Font release for %s", NERD_FONT)
+        return
+    log.info("downloading %s", asset.browser_download_url)
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "font.tar.xz"
+        download(asset.browser_download_url, archive)
+        with tarfile.open(archive) as tf:
+            tf.extractall(tmp)
+        for font_file in Path(tmp).glob("*.[to]tf"):
+            shutil.copy2(font_file, font_dir)
+    if has("fc-cache"):
+        run(["fc-cache", "-f", str(font_dir)])
 
 
 def read_list(name: str) -> list[str]:
@@ -644,24 +359,6 @@ def get_latest_release(repo: str) -> GitHubRelease | None:
         return None
 
 
-def _find_linux_tarball_asset(release: GitHubRelease, arch: str) -> GitHubAsset | None:
-    """Find a Linux tarball asset matching the given architecture."""
-    arch_variants = (
-        {arch, "amd64", "x86_64"} if arch == "x86_64" else {arch, "arm64", "aarch64"}
-    )
-    arch_pattern = "|".join(re.escape(a) for a in arch_variants)
-    pattern = re.compile(rf"[Ll]inux[_-]({arch_pattern}).*\.(tar\.gz|tgz)$")
-    return release.find_asset(pattern)
-
-
-def _find_lnav_asset(release: GitHubRelease, arch: str) -> GitHubAsset | None:
-    """Find a Linux lnav asset matching the given architecture."""
-    arch_variants = {"linux-musl-x86_64"} if arch == "x86_64" else {"linux-musl-arm64"}
-    arch_pattern = "|".join(re.escape(a) for a in arch_variants)
-    pattern = re.compile(rf"lnav-.*-({arch_pattern})\.zip$")
-    return release.find_asset(pattern)
-
-
 def download(url: str, dest: Path):
     """Download a URL to a local file."""
     with httpx.stream("GET", url, follow_redirects=True) as resp:
@@ -669,34 +366,6 @@ def download(url: str, dest: Path):
         with open(dest, "wb") as f:
             for chunk in resp.iter_bytes():
                 f.write(chunk)
-
-
-def download_and_extract_tar_gz(url: str, dest_dir: str):
-    """Download and extract a .tar.gz archive to dest_dir."""
-    with tempfile.NamedTemporaryFile(suffix=".tar.gz") as tmp:
-        download(url, Path(tmp.name))
-        with tarfile.open(tmp.name, mode="r:gz") as tf:
-            tf.extractall(dest_dir)
-
-
-def download_and_extract_zip(url: str, dest_dir: str):
-    """Download and extract a .zip archive to dest_dir."""
-    with tempfile.NamedTemporaryFile(suffix=".zip") as tmp:
-        download(url, Path(tmp.name))
-        with zipfile.ZipFile(tmp.name, mode="r") as zf:
-            zf.extractall(dest_dir)
-            # Restore executable permissions for files with executable bit set in zip
-            for info in zf.infolist():
-                if info.external_attr >> 16 & 0o111:
-                    extracted = Path(dest_dir) / info.filename
-                    extracted.chmod(0o755)
-
-
-def _remove_path(path: Path):
-    if path.is_symlink() or path.is_file():
-        path.unlink()
-    elif path.exists():
-        shutil.rmtree(path)
 
 
 def _git_clone_or_pull(repo: str, dest: Path, *, depth: int | None = 1) -> bool:
@@ -712,59 +381,6 @@ def _git_clone_or_pull(repo: str, dest: Path, *, depth: int | None = 1) -> bool:
     cmd.extend([repo, str(dest)])
     run(cmd)
     return True
-
-
-def _bun_global_spec(package: str) -> str:
-    if package.startswith(
-        (
-            "http://",
-            "https://",
-            "git+",
-            "file:",
-            "link:",
-            "workspace:",
-            "./",
-            "../",
-            "/",
-        )
-    ):
-        return package
-    if ":" in package:
-        return package
-    separator = package.rfind("@")
-    if separator > 0:
-        return package
-    return f"{package}@latest"
-
-
-VALID_REFRESH_PACKAGES = {
-    "rustup",
-    "cargo-binstall",
-    "fzf",
-    "neovim",
-    "nerd-fonts",
-    "gitlab-ci-local",
-    "lazygit",
-    "lnav",
-    "oh-my-zsh",
-    "uv",
-    "bun",
-    "uv-tools",
-}
-
-
-def _validate_refresh_packages(value: str) -> set[str]:
-    """Validate and parse comma-separated package names for --refresh-independent."""
-    if not value:
-        return set()
-    packages = {p.strip() for p in value.split(",")}
-    invalid = packages - VALID_REFRESH_PACKAGES
-    if invalid:
-        valid_list = ", ".join(sorted(VALID_REFRESH_PACKAGES))
-        raise argparse.ArgumentTypeError(
-            f"invalid package(s): {', '.join(sorted(invalid))}. Valid packages are: {valid_list}"
-        )
-    return packages
 
 
 def parse_args(argv: list[str] | None = None) -> Config:
@@ -783,11 +399,10 @@ def parse_args(argv: list[str] | None = None) -> Config:
     )
     parser.add_argument(
         "--refresh-independent",
-        nargs="?",
-        const="",
-        type=_validate_refresh_packages,
-        metavar="PACKAGES",
-        help="update independently installed tools to their latest managed version; optionally specify comma-separated packages to refresh only those (no spaces in list)",
+        nargs="*",
+        metavar="TOOL",
+        help="update independently managed tools (mise, rustup, oh-my-zsh, "
+        "fonts); optionally name specific mise tools to pass to `mise upgrade`",
     )
     parser.add_argument(
         "-v",
@@ -805,10 +420,8 @@ def parse_args(argv: list[str] | None = None) -> Config:
     return Config(
         no_desktop=ns.no_desktop,
         dry_run=ns.dry_run,
-        refresh_independent=ns.refresh_independent is not None,
-        refresh_packages=ns.refresh_independent
-        if ns.refresh_independent is not None
-        else set(),
+        refresh=ns.refresh_independent is not None,
+        refresh_tools=ns.refresh_independent or [],
     )
 
 

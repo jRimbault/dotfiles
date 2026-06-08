@@ -30,6 +30,9 @@ prepend:path "$HOME/bin"
 prepend:path "$HOME/.dotnet"
 prepend:path "$GOBIN"
 prepend:path "$HOME/.local/share/JetBrains/Toolbox/scripts"
+# mise-managed tool shims; cover non-interactive/login shells (interactive
+# shells additionally run `mise activate` via .config/shell/completions).
+prepend:path "$HOME/.local/share/mise/shims"
 
 
 EDITOR="$(command -v nvim)"

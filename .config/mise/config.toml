@@ -1,0 +1,36 @@
+# Dev tools managed by mise (https://mise.jdx.dev/).
+# Installed with `mise install`; refreshed with `mise upgrade`.
+# Tools mise cannot manage stay in the bootstrap: apt packages, rustup
+# (rust-analyzer component), oh-my-zsh, and the Hack Nerd Font.
+
+[tools]
+# JS runtime, required by the npm backend below.
+node = "latest"
+
+# Modern CLI replacements.
+bat = "latest"
+eza = "latest"
+fd = "latest"
+delta = "latest"
+ripgrep = "latest"
+zoxide = "latest"
+# No prebuilt binary; the cargo backend builds it from source, so this needs
+# rustup's cargo and the alacritty build dependencies from apt.list.
+"cargo:alacritty" = "latest"
+
+# Editor and terminal tooling.
+fzf = "latest"
+neovim = "latest"
+lazygit = "latest"
+lnav = "latest"
+# GitHub-release binary; the ubi backend avoids pulling in node for this one.
+"ubi:firecow/gitlab-ci-local" = "latest"
+
+# Python tooling.
+uv = "latest"
+ruff = "latest"
+ty = "latest"
+yt-dlp = "latest"
+
+# Language servers.
+"npm:bash-language-server" = "latest"
