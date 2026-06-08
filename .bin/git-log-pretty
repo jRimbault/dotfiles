@@ -1,5 +1,31 @@
 #!/usr/bin/env bash
 
+#/ Usage: git-log-pretty [<git log options>] [<revision range>] [-- <path>...]
+#/
+#/ Pretty, column-aligned `git log --graph`. All arguments are forwarded to
+#/ `git log`, so any of its options work. The most useful ones for taming
+#/ merge-heavy histories (e.g. one-merge-per-MR GitLab repos):
+#/
+#/   --first-parent   Follow only the first parent of each merge, collapsing
+#/                    every merged branch to a single mainline row and
+#/                    linearizing the graph (no |\ /| scaffolding).
+#/   --no-merges      Hide merge commits entirely, showing only the
+#/                    underlying commits.
+#/
+#/ Examples:
+#/   git-log-pretty                      # full graph
+#/   git-log-pretty --first-parent       # one row per merge, linear
+#/   git-log-pretty --no-merges -n 20    # last 20 non-merge commits
+#/   git-log-pretty --author="Jane Doe"  # quoted args are preserved
+#/
+#/ Options:
+#/   -h, --help   Show this help and exit.
+
+usage()
+{
+  grep '^#/' "$0" | cut -c4-
+}
+
 # Control character, this is not a space, it's an EM SPACE
 # U+2003
 CCHAR=' '
@@ -31,7 +57,8 @@ pretty_git_log()
 {
   git log \
     --graph \
-    --pretty="tformat:$LOG_FORMAT" $* |
+    --no-show-signature \
+    --pretty="tformat:$LOG_FORMAT" "$@" |
     pretty_git_format |
     git_page_maybe
 }
@@ -43,8 +70,11 @@ pretty_git_format()
   # Replace (2 years, 5 months) with (2 years)
   sed -Ee "s/(^[^$CDATE]*), [[:digit:]]+ .*months?$CDATE/\\1/" |
   sed "s/$CDATE//" |
-  # Line columns up based on } delimiter
-  column -s "$CCHAR" -t
+  # Line columns up based on the EM SPACE delimiter
+  column -s "$CCHAR" -t |
+  # column right-pads every cell; on merge-heavy histories the graph-only
+  # lines (|\, |/) become long runs of trailing whitespace. Strip it.
+  sed -Ee 's/[[:space:]]+$//'
 }
 
 git_page_maybe()
@@ -61,5 +91,11 @@ git_page_maybe()
 
 # do not execute script if it is sourced or downloaded-piped to bash
 if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+  esac
   pretty_git_log "$@"
 fi
