@@ -25,6 +25,7 @@
     log-oneline = log --graph --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset'
     lo = log-oneline
     lop = log-pretty
+    lg = log-graph
     # log-oneline for a path, with all tag commits unioned in (release tags often touch only Cargo.toml)
     lot = "!f() { path=\"$1\"; shift; { git log --pretty='%ct %H' -- \"$path\"; git for-each-ref --format='%(creatordate:unix) %(*objectname)' refs/tags | awk 'NF==2'; } | sort -k1,1nr -u | awk '{print $2}' | git log --no-walk=sorted --pretty='%Cred%h%Creset %Cgreen%cr %Cblue%an%Creset %s%C(yellow)%d%Creset' --stdin \"$@\"; }; f"
     branches-sorted = branch -v --color=always --sort=-committerdate

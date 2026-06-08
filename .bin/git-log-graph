@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#/ Usage: git-log-graph [<git log options>] [<revision range>] [-- <path>...]
+#/
+#/ Column-aligned `git log --graph`. All arguments are forwarded to `git log`.
+#/ Useful ones for merge-heavy (one-merge-per-MR) histories:
+#/   --first-parent   collapse each merge to a single mainline row, linearized
+#/   --no-merges      show only the underlying commits
+#/   -h, --help       show this help
+
+set -euo pipefail
+
+usage() { grep '^#/' "$0" | cut -c4-; }
+
+# Field delimiter: ASCII Unit Separator (0x1F). It is a control character that
+# cannot appear in a commit hash, date, author, subject or ref, so it is a
+# collision-proof separator. The original git-log-pretty used printable Unicode
+# spaces (U+2003 / U+2007), which a commit message can legitimately contain and
+# silently break the column split.
+readonly US=$'\x1f'
+
+readonly LOG_FORMAT="\
+%C(always,red)%h%C(always,reset)${US}\
+%C(always,green)%ar${US}\
+%C(always,blue)%an%C(always,reset)${US}\
+%s%C(always,yellow)%d%C(always,reset)"
+
+pretty_git_log() {
+  git log --graph --no-show-signature --pretty="tformat:${LOG_FORMAT}" "$@" \
+    | pretty_git_format \
+    | git_page_maybe
+}
+
+pretty_git_format() {
+  # "3 days ago"     -> "3 days"   (strip trailing "ago" inside the date field)
+  # "2 years, 5 ..." -> "2 years"  (keep only the largest unit)
+  # Both anchor on the delimiter, so they only ever touch the date field.
+  sed -E "s/ ago${US}/${US}/" \
+    | sed -E "s/, [0-9]+ (years?|months?|weeks?|days?|hours?|minutes?)${US}/${US}/" \
+    | column -t -s "$US" \
+    | sed -E 's/[[:space:]]+$//'   # column right-pads every cell; trim the
+                                   # trailing run it leaves on graph-only lines
+}
+
+git_page_maybe() {
+  if [ -n "${GIT_NO_PAGER:-}" ]; then
+    cat
+  else
+    less --quit-if-one-screen --no-init --RAW-CONTROL-CHARS --chop-long-lines
+  fi
+}
+
+# do not execute script if it is sourced or downloaded-piped to bash
+if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
+  case "${1:-}" in -h | --help) usage; exit 0 ;; esac
+  pretty_git_log "$@"
+fi
