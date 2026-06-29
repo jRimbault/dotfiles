@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+#/ http-explore - visualize and browse a remote HTTP directory tree.
+#/
+#/ Crawls a URL with wget's spider mode (it downloads nothing, only follows
+#/ links), collects every URL it discovers, then renders them as a tree or
+#/ hands the list to fzf for interactive browsing.
+#/
+#/ Usage:
+#/   http-explore [options] <url>
+#/
+#/ Views (pick one, default: tree):
+#/   -t, --tree         Render the listing as a tree (via 'tree --fromfile').
+#/   -f, --fzf          Browse interactively in fzf, with a header preview.
+#/   -p, --pager        Show the flat URL list in a pager.
+#/
+#/ Options:
+#/   -l, --level N      Maximum recursion depth (default: wget's default, 5).
+#/   -d, --dirs-only    Keep only directory URLs (those ending in '/').
+#/   -h, --help         Show this help.
+#/
+#/ Behaviour:
+#/   - tree/pager views go through "$PAGER" (default: less).
+#/   - In fzf the preview pane shows the remote HTTP headers (content-type,
+#/     length, ...) for the highlighted entry; multi-select with <tab>, and
+#/     the chosen URL(s) are printed to stdout so the tool composes:
+#/       url=$(http-explore -f http://host/bin) && wget "$url"
+#/
+#/ Examples:
+#/   http-explore http://board-on-demand.lan.provenrun.com/bin
+#/   http-explore --dirs-only http://host/bin
+#/   wget "$(http-explore -f http://host/bin)"
+
+set -euo pipefail
+
+usage() {
+  grep "^#/" "$0" | cut -c4-
+}
+
+# --- argument parsing: produce a strongly-defined set of options ------------
+
+view="tree"
+dirs_only=0
+level=""
+url=""
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h | --help)      usage; exit 0 ;;
+      -t | --tree)      view="tree"; shift ;;
+      -f | --fzf)       view="fzf"; shift ;;
+      -p | --pager)     view="pager"; shift ;;
+      -d | --dirs-only) dirs_only=1; shift ;;
+      -l | --level)     level="${2:-}"; shift 2 ;;
+      --)               shift; break ;;
+      -*)               echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+      *)                url="$1"; shift ;;
+    esac
+  done
+  [[ -n "${1:-}" ]] && url="$1"
+
+  if [[ -z "$url" ]]; then
+    echo "error: a <url> argument is required" >&2
+    usage >&2
+    exit 2
+  fi
+}
+
+# --- functional core: crawl, then shape the resulting URL list --------------
+
+# Spider the tree and emit every discovered URL on stdout, one per line.
+# wget logs each candidate to stderr; we extract the URLs from that stream.
+# --spider means nothing is written to disk. wget exits non-zero when the
+# server answers an error (e.g. a missing /robots.txt), which is expected
+# during a crawl, so we swallow its status rather than abort the pipeline.
+wget:spider() {
+  local depth_flag=()
+  [[ -n "$level" ]] && depth_flag=(--level "$level")
+
+  { wget --spider --recursive --no-parent --no-verbose \
+    "${depth_flag[@]}" "$url" 2>&1 || true; } |
+    grep -oE 'https?://[^ ]+' |
+    sort -u
+}
+
+# Keep only URLs that live under <url>; this drops the base itself, the
+# implicit /robots.txt probe, and anything off-site.
+urls:under-base() {
+  grep -F "${url%/}/" || true
+}
+
+# Optional dirs-only filter applied to the URL stream.
+urls:filter() {
+  if [[ "$dirs_only" -eq 1 ]]; then
+    grep '/$' || true
+  else
+    cat
+  fi
+}
+
+# Turn absolute URLs into paths relative to <url>, dropping the base itself.
+# This is the shape 'tree --fromfile' expects.
+urls:relative() {
+  # shellcheck disable=SC2001  # per-line prefix strip reads clearest with sed
+  sed "s#^${url%/}/##" | grep -v '^$' || true
+}
+
+# --- imperative shell: gather the list and present it -----------------------
+
+# Header preview for fzf; {} is an absolute URL, queried with HEAD.
+fzf:browse() {
+  fzf --multi --ansi --no-mouse \
+    --prompt="$url > " \
+    --preview="curl -sIL --max-time 5 {}" \
+    --preview-window="right:55%:wrap"
+}
+
+view:render() {
+  local list="$1"
+  case "$view" in
+    tree)
+      # 'tree --fromfile=-' builds a tree from the path list on stdin without
+      # touching the filesystem; it labels the root '.', which we relabel to
+      # the base URL. -C forces color so it survives the pipe into the pager.
+      printf '%s\n' "$list" | urls:relative |
+        tree --fromfile=- -C |
+        sed "1s#\.#${url%/}#" |
+        "${PAGER:-less}" -RFX
+      ;;
+    pager)
+      printf '%s\n' "$list" | "${PAGER:-less}" -RFX
+      ;;
+    fzf)
+      if ! command -v fzf >/dev/null 2>&1; then
+        echo "fzf not found; falling back to pager" >&2
+        printf '%s\n' "$list" | "${PAGER:-less}" -RFX
+        return 0
+      fi
+      printf '%s\n' "$list" | fzf:browse
+      ;;
+  esac
+}
+
+main() {
+  parse_args "$@"
+
+  echo "crawling $url ..." >&2
+  local list
+  list="$(wget:spider | urls:under-base | urls:filter)"
+
+  if [[ -z "$list" ]]; then
+    echo "no URLs discovered under $url" >&2
+    exit 1
+  fi
+
+  view:render "$list"
+}
+
+main "$@"
