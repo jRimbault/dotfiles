@@ -46,7 +46,10 @@ _zsh_git_status_short()
     zle reset-prompt
 }
 zle -N _zsh_git_status_short
-bindkey ^j _zsh_git_status_short
+# ^j is Ctrl-J / linefeed, which some terminals send for the numpad Enter
+# key (distinct from main Enter's ^M) — bound to ^g instead to avoid
+# hijacking numpad Enter as accept-line.
+bindkey ^g _zsh_git_status_short
 
 # history fuzzy finder
 _history_fuzzy_finder()
