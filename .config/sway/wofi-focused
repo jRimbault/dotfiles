@@ -1,22 +1,44 @@
 #!/usr/bin/env bash
 #/ Usage: wofi-focused [WOFI_ARGS...]
 #/
-#/ Run wofi on the currently focused sway output.
+#/ Run wofi on the currently focused sway output, using the active theme
+#/ selected with wofi-theme.
 #/
 #/ wofi 1.5 resolves percentage sizes against an arbitrary monitor rather
 #/ than the one it opens on, so with mixed resolutions the launcher is
-#/ mis-sized and spills onto neighbouring outputs. This wrapper computes pixel
-#/ sizes from the focused output's logical geometry instead: full width and
-#/ HEIGHT_PERCENT of its height. location=top_left in ~/.config/wofi/config
-#/ keeps sway from centering the surface.
+#/ mis-sized and spills onto neighbouring outputs. This wrapper reads the
+#/ theme's width/height and resolves percentages against the focused output's
+#/ logical geometry itself, passing wofi plain pixels.
+#/
+#/ Themes live in ~/.config/wofi: "default" is config + style.css, any other
+#/ NAME is NAME.conf + NAME.css.
 #/
 #/ Examples:
 #/   wofi-focused --show drun
 #/   wofi-focused --show run
 set -euo pipefail
 
+readonly WOFI_DIR="$HOME/.config/wofi"
+readonly THEME_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/wofi/theme"
+
 usage() {
     grep "^#/" "$0" | cut -c4-
+}
+
+# Print the value of KEY from wofi config file CONF, empty if unset.
+conf_value() {
+    local conf="$1" key="$2"
+    sed -n "s/^${key}=//p" "$conf" | tail -n 1
+}
+
+# Resolve a wofi size (pixels or N%) against the output dimension TOTAL.
+resolve_size() {
+    local size="$1" total="$2"
+    if [[ "$size" == *% ]]; then
+        echo "$((total * ${size%\%} / 100))"
+    else
+        echo "$size"
+    fi
 }
 
 if [[ "${1:-}" == "--help" ]]; then
@@ -24,15 +46,25 @@ if [[ "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
-readonly HEIGHT_PERCENT=30
+theme="$(cat "$THEME_FILE" 2>/dev/null || echo default)"
+if [[ "$theme" == default || ! -f "$WOFI_DIR/$theme.conf" ]]; then
+    conf="$WOFI_DIR/config"
+    style="$WOFI_DIR/style.css"
+else
+    conf="$WOFI_DIR/$theme.conf"
+    style="$WOFI_DIR/$theme.css"
+fi
 
 # rect is in logical pixels (scale already applied), which is what wofi expects.
-read -r output width height < <(
+read -r output out_width out_height < <(
     swaymsg -t get_outputs \
         | jq -r '.[] | select(.focused) | "\(.name) \(.rect.width) \(.rect.height)"'
 )
 
-exec wofi --monitor "$output" \
-    --width "$width" \
-    --height "$((height * HEIGHT_PERCENT / 100))" \
+width="$(resolve_size "$(conf_value "$conf" width)" "$out_width")"
+height="$(resolve_size "$(conf_value "$conf" height)" "$out_height")"
+
+exec wofi --conf "$conf" --style "$style" --monitor "$output" \
+    ${width:+--width "$width"} \
+    ${height:+--height "$height"} \
     "$@"

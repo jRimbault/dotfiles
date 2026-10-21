@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+#/ Usage: wofi-theme [--list | NAME]
+#/
+#/ Select the wofi theme used by wofi-focused.
+#/
+#/ Without arguments, pick a theme from a wofi menu. With NAME, switch to it
+#/ directly. Themes live in ~/.config/wofi: "default" is config + style.css,
+#/ any other NAME is NAME.conf + NAME.css. The choice is stored in
+#/ $XDG_STATE_HOME/wofi/theme so it stays out of the tracked config.
+#/
+#/ Options:
+#/   --list    print available themes, the active one marked with '*'
+#/   --help    show this help
+#/
+#/ Examples:
+#/   wofi-theme
+#/   wofi-theme spotlight
+#/   wofi-theme default
+set -euo pipefail
+
+readonly WOFI_DIR="$HOME/.config/wofi"
+readonly THEME_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/wofi/theme"
+LAUNCHER="$(dirname "$(readlink -f "$0")")/wofi-focused"
+readonly LAUNCHER
+
+usage() {
+    grep "^#/" "$0" | cut -c4-
+}
+
+list_themes() {
+    echo default
+    local conf
+    for conf in "$WOFI_DIR"/*.conf; do
+        [[ -f "$conf" && -f "${conf%.conf}.css" ]] && basename "${conf%.conf}"
+    done
+}
+
+current_theme() {
+    cat "$THEME_FILE" 2>/dev/null || echo default
+}
+
+set_theme() {
+    local theme="$1"
+    # No grep -q: exiting on the first match would SIGPIPE list_themes and,
+    # under pipefail, fail the check for exactly the themes that exist.
+    if ! list_themes | grep -xF -- "$theme" >/dev/null; then
+        echo "wofi-theme: unknown theme '$theme'" >&2
+        echo "available: $(list_themes | paste -sd ' ')" >&2
+        exit 1
+    fi
+    mkdir -p "$(dirname "$THEME_FILE")"
+    echo "$theme" > "$THEME_FILE"
+    notify-send --app-name wofi "wofi theme" "$theme" 2>/dev/null || true
+}
+
+case "${1:-}" in
+    --help)
+        usage
+        ;;
+    --list)
+        current="$(current_theme)"
+        list_themes | while read -r theme; do
+            [[ "$theme" == "$current" ]] && echo "* $theme" || echo "  $theme"
+        done
+        ;;
+    "")
+        choice="$(list_themes | "$LAUNCHER" --dmenu --prompt "wofi theme ($(current_theme))")" || exit 0
+        # Escape closes wofi with an empty selection: nothing to change.
+        [[ -n "$choice" ]] || exit 0
+        set_theme "$choice"
+        ;;
+    *)
+        set_theme "$1"
+        ;;
+esac

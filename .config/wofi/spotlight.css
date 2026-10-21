@@ -1,0 +1,102 @@
+/*
+ * Wofi "Spotlight" style: dark macOS launcher look.
+ * Paired with spotlight.conf (centered panel, icons, no action expanders);
+ * select it with `wofi-theme spotlight`.
+ *
+ * The rounded panel is drawn by #outer-box on a transparent window. It has no
+ * padding or border: wofi adds those outside the requested width, so spacing
+ * lives in the children's margins and the hairline border is an inset shadow.
+ */
+
+@define-color panel       #1e1e20;
+@define-color hairline    alpha(#ffffff, 0.10);
+@define-color separator   alpha(#ffffff, 0.08);
+@define-color label       #f5f5f7;
+@define-color secondary   alpha(#ebebf5, 0.60);
+@define-color accent      #0a84ff;
+
+* {
+  font-family: "Inter", "Cantarell", sans-serif;
+}
+
+window {
+  background-color: transparent;
+  border: 0px;
+}
+
+#outer-box {
+  margin: 0px;
+  padding: 0px;
+  border: 0px;
+  border-radius: 14px;
+  background-color: @panel;
+  box-shadow: inset 0 0 0 1px @hairline;
+}
+
+#input {
+  margin: 8px 10px 0px 10px;
+  padding: 10px 8px;
+  border: 0px;
+  border-radius: 0px;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  color: @label;
+  caret-color: @label;
+  font-size: 22px;
+  font-weight: 300;
+}
+
+#input:focus {
+  border: 0px;
+  box-shadow: none;
+}
+
+#input image {
+  color: @secondary;
+  margin-right: 6px;
+}
+
+#scroll {
+  margin: 6px 0px 0px 0px;
+  border-top: 1px solid @separator;
+  background-color: transparent;
+}
+
+#inner-box {
+  margin: 8px 8px 8px 8px;
+  padding: 0px;
+  background-color: transparent;
+}
+
+#entry {
+  margin: 1px 0px;
+  padding: 5px 10px;
+  border: 0px;
+  border-radius: 8px;
+  background-color: transparent;
+}
+
+#entry:selected {
+  background-color: @accent;
+  background-image: none;
+}
+
+#img {
+  margin-right: 12px;
+}
+
+#text {
+  margin: 0px;
+  padding: 0px;
+  color: @label;
+  font-size: 14px;
+}
+
+#entry:selected #text {
+  color: #ffffff;
+}
+
+scrollbar {
+  opacity: 0;
+}
