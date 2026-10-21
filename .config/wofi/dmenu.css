@@ -1,0 +1,94 @@
+/*
+ * Wofi "dmenu" style: compact full-width bar, monospace, Gruvbox dark.
+ * Select it with `wofi-theme dmenu`.
+ *
+ * #outer-box has no padding or border: wofi adds those outside the requested
+ * width, overflowing the output. Spacing lives in the children's margins and
+ * the bottom rule is an inset shadow.
+ */
+
+@define-color bg       #282828;
+@define-color bg1      #3c3836;
+@define-color fg       #ebdbb2;
+@define-color fg4      #a89984;
+@define-color yellow   #fabd2f;
+@define-color orange   #fe8019;
+
+* {
+  font-family: "Hack Nerd Font Mono", "DejaVu Sans Mono", monospace;
+  font-size: 13px;
+}
+
+window {
+  background-color: transparent;
+  border: 0px;
+}
+
+#outer-box {
+  margin: 0px;
+  padding: 0px;
+  border: 0px;
+  border-radius: 0px;
+  background-color: @bg;
+  box-shadow: inset 0 -2px 0 @yellow;
+}
+
+#input {
+  margin: 4px 6px 0px 6px;
+  padding: 4px 8px;
+  border: 0px;
+  border-radius: 0px;
+  background-color: @bg1;
+  background-image: none;
+  box-shadow: none;
+  color: @fg;
+  caret-color: @yellow;
+}
+
+#input:focus {
+  border: 0px;
+  box-shadow: none;
+}
+
+#input image {
+  color: @yellow;
+}
+
+#scroll {
+  margin: 0px;
+  background-color: transparent;
+}
+
+#inner-box {
+  margin: 4px 6px 6px 6px;
+  padding: 0px;
+  background-color: transparent;
+}
+
+#entry {
+  margin: 0px;
+  padding: 1px 8px;
+  border: 0px;
+  border-radius: 0px;
+  background-color: transparent;
+}
+
+#entry:selected {
+  background-color: @yellow;
+  background-image: none;
+}
+
+#text {
+  margin: 0px;
+  padding: 0px;
+  color: @fg;
+}
+
+#entry:selected #text {
+  color: @bg;
+  font-weight: bold;
+}
+
+scrollbar {
+  opacity: 0;
+}
