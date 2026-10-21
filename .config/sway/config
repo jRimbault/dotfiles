@@ -112,8 +112,8 @@ bindsym $mod+Return exec $term
 bindsym $mod+Shift+q kill
 
 # Start your launcher
-bindsym $mod+space exec 'wofi --show drun'
-bindsym $mod+Alt+space exec 'wofi --show run'
+bindsym $mod+space exec '~/.config/sway/wofi-focused --show drun'
+bindsym $mod+Alt+space exec '~/.config/sway/wofi-focused --show run'
 
 # Drag floating windows by holding down $mod and left mouse button.
 # Resize them with right mouse button + $mod.

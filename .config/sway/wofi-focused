@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#/ Usage: wofi-focused [WOFI_ARGS...]
+#/
+#/ Run wofi on the currently focused sway output.
+#/
+#/ wofi 1.5 resolves percentage sizes against an arbitrary monitor rather
+#/ than the one it opens on, so with mixed resolutions the launcher is
+#/ mis-sized and spills onto neighbouring outputs. This wrapper computes pixel
+#/ sizes from the focused output's logical geometry instead: full width and
+#/ HEIGHT_PERCENT of its height. location=top_left in ~/.config/wofi/config
+#/ keeps sway from centering the surface.
+#/
+#/ Examples:
+#/   wofi-focused --show drun
+#/   wofi-focused --show run
+set -euo pipefail
+
+usage() {
+    grep "^#/" "$0" | cut -c4-
+}
+
+if [[ "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+readonly HEIGHT_PERCENT=30
+
+# rect is in logical pixels (scale already applied), which is what wofi expects.
+read -r output width height < <(
+    swaymsg -t get_outputs \
+        | jq -r '.[] | select(.focused) | "\(.name) \(.rect.width) \(.rect.height)"'
+)
+
+exec wofi --monitor "$output" \
+    --width "$width" \
+    --height "$((height * HEIGHT_PERCENT / 100))" \
+    "$@"
