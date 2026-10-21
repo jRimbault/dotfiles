@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#/ Usage: wofi-theme [--list | NAME]
+#/ Usage: wofi-theme [--list | --install | NAME]
 #/
 #/ Select the wofi theme used by wofi-focused.
 #/
@@ -9,8 +9,11 @@
 #/ $XDG_STATE_HOME/wofi/theme so it stays out of the tracked config.
 #/
 #/ Options:
-#/   --list    print available themes, the active one marked with '*'
-#/   --help    show this help
+#/   --list     print available themes, the active one marked with '*'
+#/   --install  link ~/.config/wofi/wofi-theme.desktop into
+#/              $XDG_DATA_HOME/applications so the picker shows up in wofi
+#/              (done automatically by wofi-focused when missing)
+#/   --help     show this help
 #/
 #/ Examples:
 #/   wofi-theme
@@ -20,6 +23,10 @@ set -euo pipefail
 
 readonly WOFI_DIR="$HOME/.config/wofi"
 readonly THEME_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/wofi/theme"
+# The entry is tracked in the wofi config dir; the applications dir may live
+# outside the dotfiles work tree, so it only holds a symlink.
+readonly DESKTOP_SRC="$WOFI_DIR/wofi-theme.desktop"
+readonly DESKTOP_LINK="${XDG_DATA_HOME:-$HOME/.local/share}/applications/wofi-theme.desktop"
 LAUNCHER="$(dirname "$(readlink -f "$0")")/wofi-focused"
 readonly LAUNCHER
 
@@ -53,9 +60,17 @@ set_theme() {
     notify-send --app-name wofi "wofi theme" "$theme" 2>/dev/null || true
 }
 
+install_desktop_entry() {
+    mkdir -p "$(dirname "$DESKTOP_LINK")"
+    ln -sfn "$DESKTOP_SRC" "$DESKTOP_LINK"
+}
+
 case "${1:-}" in
     --help)
         usage
+        ;;
+    --install)
+        install_desktop_entry
         ;;
     --list)
         current="$(current_theme)"

@@ -46,6 +46,12 @@ if [[ "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
+# Self-install the theme picker entry on fresh checkouts.
+desktop_link="${XDG_DATA_HOME:-$HOME/.local/share}/applications/wofi-theme.desktop"
+if [[ ! -e "$desktop_link" ]]; then
+    "$(dirname "$(readlink -f "$0")")/wofi-theme" --install || true
+fi
+
 theme="$(cat "$THEME_FILE" 2>/dev/null || echo default)"
 if [[ "$theme" == default || ! -f "$WOFI_DIR/$theme.conf" ]]; then
     conf="$WOFI_DIR/config"

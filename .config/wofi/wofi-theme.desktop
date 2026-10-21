@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Wofi Theme
+Comment=Switch the wofi launcher theme
+Exec=sh -c "exec \\"\\$HOME/.config/sway/wofi-theme\\""
+Icon=preferences-desktop-theme
+Terminal=false
+Categories=Settings;
+Keywords=wofi;theme;launcher;style;
